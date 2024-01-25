@@ -18,21 +18,22 @@ def train(system: System):
     torch.manual_seed(seed)
 
     num_interpolation_points = 100
-    
+
     # choose sample coords in x
     limits = system.get_approx_region()
     mesh_index = []
     for i in range(len(limits)):
         mesh_index.append(np.linspace(*limits[i], num_interpolation_points))
     meshgrid = np.meshgrid(*mesh_index) # shape [(NIP, NIP, ..), (NIP, NIP, ..)]
-    
+
     # calculate alpha(x)
-    alpha = system.get_alpha_of_x(meshgrid) # shape (NIP, NIP, ..)
+    alpha_func = system.get_alpha_of_x_func()
+    alpha = alpha_func(*meshgrid) # shape (NIP, NIP, ..)
 
     # calculate z(x)
-    q_func = system.get_q_func()  
+    q_func = system.get_q_func()
     z_data = q_func(*meshgrid)[:,0] # shape (N, NIP, NIP, ...)
-    
+
     # shape data
     inputs = z_data.reshape(system.N, num_interpolation_points**system.n) # shape (N, NIP**n)
     labels = np.empty((system.n+1, num_interpolation_points**system.n)) # shape (n+1, NIP**n)
@@ -44,7 +45,7 @@ def train(system: System):
     scaler_lab = MinMaxScaler(feature_range=(-1, 1))
     inputs_normalized = scaler_in.fit_transform(inputs.T)
     labels_normalized = scaler_lab.fit_transform(labels.T)
-    
+
     # type casting
     inputs_normalized = torch.from_numpy(inputs_normalized).float()
     labels_normalized = torch.from_numpy(labels_normalized).float()
@@ -53,7 +54,7 @@ def train(system: System):
     batch_size = 50
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    net = Net()
+    net = Net(n=system.n, N=system.N)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(net.parameters(), lr=0.001)
 
@@ -73,11 +74,11 @@ def train(system: System):
     path = os.path.join("models", system.name, "model_state_dict.pth")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     torch.save(net.state_dict(), path)
-    
+
     joblib.dump(scaler_in, os.path.join("models", system.name, 'scaler_in.pkl'))
     joblib.dump(scaler_lab, os.path.join("models", system.name, 'scaler_lab.pkl'))
     # IPS()
-    
+
     get_lipschitz_const(net)
 
 def get_lipschitz_const(net):
@@ -98,9 +99,14 @@ def get_lipschitz_const(net):
         gamma = max(gamma, np.abs((alphaa - alphab) / np.linalg.norm(za-zb)))
     print("Lipschitz constant approx.:", gamma)
 
+################################################################################
+system = DuffingOscillator()
+# system = UndampedHarmonicOscillator()
+################################################################################
 
-system = UndampedHarmonicOscillator()
-# train(system)
+
+
+train(system)
 net = Net()
-net.load_state_dict(torch.load(os.path.join("models", system.name, 'model_state_dict.pth')))
-get_lipschitz_const(net)
+# net.load_state_dict(torch.load(os.path.join("models", system.name, 'model_state_dict.pth')))
+# get_lipschitz_const(net)

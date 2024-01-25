@@ -1,4 +1,4 @@
-import os 
+import os
 import torch
 import numpy as np
 import joblib
@@ -7,13 +7,23 @@ import matplotlib.pyplot as plt
 
 from systems import *
 from net import Net
+from util import *
 
 
 ######################################################
-system = UndampedHarmonicOscillator()
-L = np.array([40, 600, 4000, 10000])
-x0 = np.array([0.5, 0.5])
-z_hat0 = np.array([0, 0, 0, 0])
+s = 2
+if s == 1:
+    system = UndampedHarmonicOscillator()
+    # L = np.array([40, 600, 4000, 10000])
+    L = get_coefs(np.ones(system.N) * -10)
+    x0 = np.array([0.5, 0.5])
+    z_hat0 = np.array([0, 0, 0, 0])
+if s == 2:
+    system = DuffingOscillator()
+    L = get_coefs(np.ones(system.N) * -10)
+    x0 = np.array([0.8, 0])
+    z_hat0 = np.zeros(6)
+
 
 
 
@@ -22,7 +32,7 @@ model_path = os.path.join("models", system.name, "model_state_dict.pth")
 scaler_in = joblib.load(os.path.join("models", system.name, 'scaler_in.pkl'))
 scaler_lab = joblib.load(os.path.join("models", system.name, 'scaler_lab.pkl'))
 
-model = Net()
+model = Net(n=system.n, N=system.N)
 model.load_state_dict(torch.load(model_path))
 
 # Observability Canonical Form
@@ -35,11 +45,11 @@ def system_with_observer_rhs(t, state):
     assert len(state) == system.n + system.N, "Dimension Error"
     x = state[:system.n]
     z_hat = state[system.n:]
-    
+
     z_hat_normalized = scaler_in.transform([z_hat])[0]
-    
+
     z_tensor = torch.tensor(z_hat_normalized, dtype=torch.float32).unsqueeze(0)
-    
+
     # output nerual net
     with torch.no_grad():
         x_hat_normalized = model(z_tensor).numpy()[0]
@@ -49,10 +59,10 @@ def system_with_observer_rhs(t, state):
     # original system
     dxdt = system.rhs(t, x)
     y = system.get_output(x)
-    
+
     # observer
     dz_hatdt = A @ z_hat + b * alpha_hat - L * (z_hat[0] - y)
-    
+
     return np.concatenate((dxdt, dz_hatdt))
 
 # simulation
