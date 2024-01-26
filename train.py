@@ -57,18 +57,20 @@ def train(system: System):
     net = Net(n=system.n, N=system.N)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(net.parameters(), lr=0.001)
-
-    for epoch in range(100):
-        running_loss = 0.0
-        for i, (inputs, labels) in enumerate(dataloader):
-            optimizer.zero_grad()
-            outputs = net(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item()
-        avg_loss = running_loss / len(dataloader)
-        print(f'Epoch [{epoch + 1}/100], Loss: {avg_loss:.6f}')
+    try:
+        for epoch in range(100):
+            running_loss = 0.0
+            for i, (inputs, labels) in enumerate(dataloader):
+                optimizer.zero_grad()
+                outputs = net(inputs)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+                running_loss += loss.item()
+            avg_loss = running_loss / len(dataloader)
+            print(f'Epoch [{epoch + 1}/100], Loss: {avg_loss:.6f}')
+    except KeyboardInterrupt:
+        IPS()
 
     print('Training finished')
     path = os.path.join("models", system.name, "model_state_dict.pth")
@@ -100,13 +102,17 @@ def get_lipschitz_const(net):
     print("Lipschitz constant approx.:", gamma)
 
 ################################################################################
-system = DuffingOscillator()
 # system = UndampedHarmonicOscillator()
+# system = DuffingOscillator()
+# system = VanderPol()
+system = Lorenz()
 ################################################################################
 
 
 
 train(system)
-net = Net()
+
+
+# net = Net(n=system.n, N=system.N)
 # net.load_state_dict(torch.load(os.path.join("models", system.name, 'model_state_dict.pth')))
 # get_lipschitz_const(net)

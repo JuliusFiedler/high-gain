@@ -75,3 +75,53 @@ class DuffingOscillator(System):
 
     def get_approx_region(self):
         return [[-1.5, 1.5], [-1.5, 1.5]]
+
+class VanderPol(System):
+    def __init__(self) -> None:
+        self.x1, self.x2 = self.x = sp.symbols("x1, x2")
+        self.f_symb = sp.Matrix([self.x2, -self.x1 - -self.x2 * (self.x1**2 - 1)])
+        self.h_symb = self.x2
+        self.n = 2
+        self.N = 4
+        self.z = [sp.var(f"z_{i}") for i in range(self.N)]
+        self.name = "VanderPol"
+        super().__init__()
+
+    def rhs(self, t, x):
+        return [x[1], -x[0] - x[1] * (x[0] ** 2 - 1)]
+
+    def get_output(self, x):
+        return x[1]
+
+    def get_approx_region(self):
+        return [[-2.5, 2.5], [-2.5, 2.5]]
+
+
+class Lorenz(System):
+    def __init__(self) -> None:
+        self.x1, self.x2, self.x3 = self.x = sp.symbols("x1, x2, x3")
+        self.sigma = 10
+        self.rho = 28
+        self.beta = 8 / 3
+        self.f_symb = sp.Matrix(
+            [
+                self.sigma * (self.x2 - self.x1),
+                self.rho * self.x1 - self.x2 - self.x1 * self.x3,
+                self.x1 * self.x2 - self.beta * self.x3,
+            ]
+        )
+        self.h_symb = self.x1
+        self.n = 3
+        self.N = 4
+        self.z = [sp.var(f"z_{i}") for i in range(self.N)]
+        self.name = "Lorenz"
+        super().__init__()
+
+    def rhs(self, t, x):
+        return [self.sigma * (x[1] - x[0]), self.rho * x[0] - x[1] - x[0] * x[2], x[0] * x[1] - self.beta * x[2]]
+
+    def get_output(self, x):
+        return x[0]
+
+    def get_approx_region(self):
+        return [[-20, 20], [-20, 20], [0, 50]]
