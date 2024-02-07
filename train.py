@@ -7,7 +7,7 @@ from ipydex import IPS
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import TensorDataset, DataLoader
 import joblib
-import adolc as ac
+# import adolc as ac
 from systems import *
 from net import Net
 
@@ -62,8 +62,9 @@ def train(system: System):
     net = Net(n=system.n, N=system.N)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(net.parameters(), lr=0.001)
+    num_epoch = 100
     try:
-        for epoch in range(100):
+        for epoch in range(num_epoch):
             running_loss = 0.0
             for i, (inputs, labels) in enumerate(dataloader):
                 optimizer.zero_grad()
@@ -73,7 +74,7 @@ def train(system: System):
                 optimizer.step()
                 running_loss += loss.item()
             avg_loss = running_loss / len(dataloader)
-            print(f'Epoch [{epoch + 1}/100], Loss: {avg_loss:.6f}')
+            print(f'Epoch [{epoch + 1}/{num_epoch}], Loss: {avg_loss:.6f}')
     except KeyboardInterrupt:
         IPS()
 
