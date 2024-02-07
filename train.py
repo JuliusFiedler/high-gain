@@ -7,7 +7,7 @@ from ipydex import IPS
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import TensorDataset, DataLoader
 import joblib
-
+import adolc as ac
 from systems import *
 from net import Net
 
@@ -33,6 +33,11 @@ def train(system: System):
     # calculate z(x)
     q_func = system.get_q_func()
     z_data = q_func(*meshgrid)[:,0] # shape (N, NIP, NIP, ...)
+
+    # calculate beta(x)
+    # if hasattr(system, "q_symb"):
+    #     beta_func = system.get_beta_of_x_func()
+    #     beta = beta_func(*meshgrid)
 
     # shape data
     inputs = z_data.reshape(system.N, num_interpolation_points**system.n) # shape (N, NIP**n)
@@ -105,7 +110,8 @@ def get_lipschitz_const(net):
 # system = UndampedHarmonicOscillator()
 # system = DuffingOscillator()
 # system = VanderPol()
-system = Lorenz()
+# system = Lorenz()
+system = Roessler()
 ################################################################################
 
 
