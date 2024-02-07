@@ -162,7 +162,7 @@ class Roessler(System):
         return x[0]
 
     def get_approx_region(self):
-        return [[-10, 12], [-8, 11], [-0.5, 25]]
+        return [[-10, 12], [-8, 11], [0, 25]]
 
 class InvPendulum(System):
     def __init__(self) -> None:
