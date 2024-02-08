@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 from systems import *
 from net import Net
 import util as u
+from ipydex import activate_ips_on_exception
+activate_ips_on_exception()
 
 add_path = None
 ######################################################
@@ -104,6 +106,9 @@ with torch.no_grad():
     x_hat_normalized = model(torch.from_numpy(z_hat_solution_normalized).float()).numpy()
 x_hat = scaler_lab.inverse_transform(x_hat_normalized)
 
+
+folder_path = os.path.join(folder_path, f"aw_{x0}")
+os.makedirs(folder_path, exist_ok=True)
 # plot x
 fig, ax = plt.subplots(system.n, 2, sharex=True, figsize=(12,2*system.n))
 for i in range(system.n):
