@@ -54,8 +54,9 @@ def test(system: System):
 
 
     d = 5
-    x, y, z = meshgrid
-    points = np.vstack((x.ravel(), y.ravel(), z.ravel())).T
+    # x, y, z = meshgrid
+    # points = np.vstack((x.ravel(), y.ravel(), z.ravel())).T
+    points = np.vstack([x.ravel() for x in meshgrid]).T
     for i, x0 in enumerate(points):
         lie = adolc.lie_scalarc(Tape_F, Tape_H, x0, d)
         if i % 1000 == 0:

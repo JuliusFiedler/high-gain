@@ -7,9 +7,10 @@ from ipydex import IPS
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import TensorDataset, DataLoader
 import joblib
-# import adolc as ac
+import adolc
 from systems import *
 from net import Net
+import time
 
 def train(system: System):
     seed = 1
@@ -18,6 +19,7 @@ def train(system: System):
     torch.manual_seed(seed)
 
     num_interpolation_points = 100
+    alpha_limit = 100
 
     # choose sample coords in x
     limits = system.get_approx_region()
@@ -26,24 +28,73 @@ def train(system: System):
         mesh_index.append(np.linspace(*limits[i], num_interpolation_points))
     meshgrid = np.meshgrid(*mesh_index) # shape [(NIP, NIP, ..), (NIP, NIP, ..)]
 
-    # calculate alpha(x)
-    alpha_func = system.get_alpha_of_x_func()
-    alpha = alpha_func(*meshgrid) # shape (NIP, NIP, ..)
+    # t1 = time.time()
+    # symbolic calculation
+    if 0:
+        # calculate alpha(x)
+        alpha_func = system.get_alpha_of_x_func()
+        alpha = alpha_func(*meshgrid) # shape (NIP, NIP, ..)
 
-    # calculate z(x)
-    q_func = system.get_q_func()
-    z_data = q_func(*meshgrid)[:,0] # shape (N, NIP, NIP, ...)
+        # calculate z(x)
+        q_func = system.get_q_func()
+        z_data = q_func(*meshgrid)[:,0] # shape (N, NIP, NIP, ...)
 
+        # shape data
+        inputs = z_data.reshape(system.N, num_interpolation_points**system.n) # shape (N, NIP**n)
+        labels = np.empty((system.n+1, num_interpolation_points**system.n)) # shape (n+1, NIP**n)
+        labels[:-1, :] = [m.reshape(num_interpolation_points**system.n) for m in meshgrid]
+        labels[-1, :] = alpha.reshape(num_interpolation_points**system.n)
+
+    # t2 = time.time()
+    # print("symbolic", t2-t1)
+    # automatic differentiation
+    else:
+        Tape_F = 0
+        Tape_H = 1
+
+        n = system.n
+        adolc.trace_on(Tape_F)
+        af = [adolc.adouble() for _ in range(n)]
+        for i in range(n):
+            af[i].declareIndependent()
+        vf = system.rhs(0, af)
+        for a in vf:
+            a.declareDependent()
+        adolc.trace_off()
+
+        adolc.trace_on(Tape_H)
+        ah = [adolc.adouble() for _ in range(n)]
+        for i in range(n):
+            ah[i].declareIndependent()
+        vh = system.get_output(ah)
+        vh.declareDependent()
+        adolc.trace_off()
+
+        d = system.N
+        lie_derivs = []
+        points = np.vstack([x.ravel() for x in meshgrid]).T
+        for i, x0 in enumerate(points):
+            lie = adolc.lie_scalarc(Tape_F, Tape_H, x0, d)
+            if alpha_limit:
+                if lie[-1] > alpha_limit:
+                    lie[-1] = alpha_limit
+            lie_derivs.append(lie)
+
+        lie_derivs = np.array(lie_derivs)
+
+        inputs = lie_derivs[:,:-1].T
+        labels = np.empty((system.n+1, num_interpolation_points**system.n)) # shape (n+1, NIP**n)
+        labels[:-1, :] = [m.reshape(num_interpolation_points**system.n) for m in meshgrid]
+        labels[-1, :] = lie_derivs[:, -1]
+
+    # t3 = time.time()
+
+    # print("adolc", t3-t2)
     # calculate beta(x)
     # if hasattr(system, "q_symb"):
     #     beta_func = system.get_beta_of_x_func()
     #     beta = beta_func(*meshgrid)
 
-    # shape data
-    inputs = z_data.reshape(system.N, num_interpolation_points**system.n) # shape (N, NIP**n)
-    labels = np.empty((system.n+1, num_interpolation_points**system.n)) # shape (n+1, NIP**n)
-    labels[:-1, :] = [m.reshape(num_interpolation_points**system.n) for m in meshgrid]
-    labels[-1, :] = alpha.reshape(num_interpolation_points**system.n)
 
     # scale data
     scaler_in = MinMaxScaler(feature_range=(-1, 1))
@@ -63,6 +114,7 @@ def train(system: System):
     criterion = nn.MSELoss()
     optimizer = optim.Adam(net.parameters(), lr=0.001)
     num_epoch = 100
+    print("start Training")
     try:
         for epoch in range(num_epoch):
             running_loss = 0.0

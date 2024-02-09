@@ -40,7 +40,8 @@ if s == 5:
     L = u.get_coefs(np.ones(system.N) * -200)
     x0 = np.array([0, 1, 5])
     z_hat0 = np.zeros(system.N)
-    add_path = f"N{system.N}"
+    # add_path = f"N{system.N}"
+
 
 
 t_span = (0, 50)
