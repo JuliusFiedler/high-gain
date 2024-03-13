@@ -18,8 +18,7 @@ def train(system: System):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    num_interpolation_points = 100
-    alpha_limit = 100
+    num_interpolation_points = 20
 
     # choose sample coords in x
     limits = system.get_approx_region()
@@ -72,20 +71,35 @@ def train(system: System):
 
         d = system.N
         lie_derivs = []
-        points = np.vstack([x.ravel() for x in meshgrid]).T
+        if hasattr(system, "get_x_data"):
+            print("using trajectory data")
+            points = system.get_x_data().T
+        else:
+            print("using grid")
+            points = np.vstack([x.ravel() for x in meshgrid]).T
         for i, x0 in enumerate(points):
             lie = adolc.lie_scalarc(Tape_F, Tape_H, x0, d)
-            if alpha_limit:
-                if lie[-1] > alpha_limit:
-                    lie[-1] = alpha_limit
+            if system.alpha_limit:
+                if lie[-1] > system.alpha_limit:
+                    lie[-1] = system.alpha_limit
             lie_derivs.append(lie)
 
         lie_derivs = np.array(lie_derivs)
 
         inputs = lie_derivs[:,:-1].T
-        labels = np.empty((system.n+1, num_interpolation_points**system.n)) # shape (n+1, NIP**n)
-        labels[:-1, :] = [m.reshape(num_interpolation_points**system.n) for m in meshgrid]
+        labels = np.empty((system.n+1, points.shape[0])) # shape (n+1, NIP**n)
+        labels[:-1, :] = points.T
         labels[-1, :] = lie_derivs[:, -1]
+
+        # IPS()
+        if system.trig_state:
+            labels_new = np.zeros((labels.shape[0]+2, labels.shape[1]))
+            labels_new[0] = np.cos(labels[0])
+            labels_new[1] = np.sin(labels[0])
+            labels_new[2] = np.cos(labels[1])
+            labels_new[3] = np.sin(labels[1])
+            labels_new[4:] = labels[2:]
+            labels = labels_new
 
     # t3 = time.time()
 
@@ -111,6 +125,9 @@ def train(system: System):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     net = Net(n=system.n, N=system.N)
+    if system.trig_state:
+        net = Net(n=system.n+2, N=system.N)
+
     criterion = nn.MSELoss()
     optimizer = optim.Adam(net.parameters(), lr=0.001)
     num_epoch = 100
@@ -142,18 +159,49 @@ def train(system: System):
     get_lipschitz_const(net)
 
 def get_lipschitz_const(net):
-    q = system.get_q_func()
-    # TODO AD
+
+    Tape_F = 0
+    Tape_H = 1
+
+    n = system.n
+    adolc.trace_on(Tape_F)
+    af = [adolc.adouble() for _ in range(n)]
+    for i in range(n):
+        af[i].declareIndependent()
+    vf = system.rhs(0, af)
+    for a in vf:
+        a.declareDependent()
+    adolc.trace_off()
+
+    adolc.trace_on(Tape_H)
+    ah = [adolc.adouble() for _ in range(n)]
+    for i in range(n):
+        ah[i].declareIndependent()
+    vh = system.get_output(ah)
+    vh.declareDependent()
+    adolc.trace_off()
+
     num_samples = 20000
     gamma = 0
-    for i in range(num_samples):
-        xa = np.random.uniform(*np.array(system.get_approx_region()).T)
-        za = q(*xa).T
-        alphaa = net(torch.tensor(za, dtype=torch.float32)).detach().numpy()[0, -1]
 
-        xb = np.random.uniform(*np.array(system.get_approx_region()).T)
-        zb = q(*xb).T
-        alphab = net(torch.tensor(zb, dtype=torch.float32)).detach().numpy()[0, -1]
+    if hasattr(system, "get_x_data"):
+        x_data = system.get_x_data()
+        minmax = np.array([np.min(x_data, axis=1), np.max(x_data, axis=1)])
+    else:
+        minmax = np.array(system.get_approx_region()).T
+
+    for i in range(num_samples):
+        if i % 1000 == 0:
+            print(i)
+        xa = np.random.uniform(*minmax)
+        xb = np.random.uniform(*minmax)
+        # za = q(*xa).T
+        za = adolc.lie_scalarc(Tape_F, Tape_H, xa, system.N-1)
+        alphaa = net(torch.tensor(za, dtype=torch.float32)).detach().numpy()[-1]
+
+        # zb = q(*xb).T
+        zb = adolc.lie_scalarc(Tape_F, Tape_H, xb, system.N-1)
+        alphab = net(torch.tensor(zb, dtype=torch.float32)).detach().numpy()[-1]
 
         # gamma = delta alpha / delta z
         gamma = max(gamma, np.abs((alphaa - alphab) / np.linalg.norm(za-zb)))
@@ -164,7 +212,10 @@ def get_lipschitz_const(net):
 # system = DuffingOscillator()
 # system = VanderPol()
 # system = Lorenz()
-system = Roessler()
+# system = Roessler()
+# system = DoublePendulum()
+system = DoublePendulum2()
+# system = InvPendulum2()
 ################################################################################
 
 

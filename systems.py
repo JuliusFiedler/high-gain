@@ -2,9 +2,15 @@ import numpy as np
 from abc import abstractmethod
 import sympy as sp
 import symbtools as st
+import symbtools.modeltools as mt
+import pickle
+from numpy import sin, cos
+from scipy.integrate import solve_ivp
 
 class System:
     def __init__(self) -> None:
+        self.trig_state = False
+        self.alpha_limit = None
         pass
 
     @abstractmethod
@@ -184,10 +190,171 @@ class InvPendulum(System):
         return [x[1], self.kappa1*np.sin(x[0]) + self.kappa2*u]
 
     def get_output(self, x):
-        return x[0]
+        return x[2]
 
     def get_input(self, x):
         return 1
 
     def get_approx_region(self):
         return [[-2.5, 2.5], [-2.5, 2.5]]
+
+class InvPendulum2(System):
+    def __init__(self) -> None:
+        self.x1, self.x2, self.x3 = self.x = sp.symbols("x1, x2, x3")
+        m = 1
+        g = 9.81
+        l = 1
+        J = 0.01
+        self.kappa = m*g*l/(J+m*l**2)
+        self.f_symb = sp.Matrix([-self.x2*self.x3, self.x1*self.x3, -self.kappa*self.x1])
+        self.h_symb = self.x2
+        self.n = len(self.x)
+        self.N = 5
+        self.z = [sp.var(f"z_{i}") for i in range(self.N)]
+        self.name = "InvPendulum2"
+        super().__init__()
+
+    def rhs(self, t, x):
+        return [-x[1]*x[2], x[0]*x[2], -self.kappa*x[0]]
+
+    def get_output(self, x):
+        return x[1]
+
+    def get_input(self, x):
+        return 1
+
+    def get_approx_region(self):
+        return [[-2.5, 2.5], [-2.5, 2.5]]
+
+    def get_x_data(self):
+        np.random.seed(2)
+        phi0 = np.random.random(size=10)*np.pi*2
+        w0 = (np.random.random(size=10) - 0.5)*2
+        x0_list = np.vstack((np.sin(phi0), np.cos(phi0), w0)).T
+        x0_list = np.concatenate((x0_list, np.array([[1,0,0.1],[1,0,-0.2]])), axis=0)
+        x_data = None
+        tend = 30
+        tt = np.linspace(0, tend, 6000)
+        for x0 in x0_list:
+            s = solve_ivp(self.rhs, (0, tend), x0, t_eval=tt)
+            if x_data is None:
+                x_data = s.y
+            else:
+                x_data = np.concatenate((x_data, s.y), axis=1)
+        return x_data
+
+class DoublePendulum(System):
+    def __init__(self) -> None:
+        self.x1, self.x2, self.x3, self.x4 = self.x = sp.symbols("x1, x2, x3, x4")
+        # \dot{x} = f(x) + g(x)*u
+        self.h_symb = self.x1
+        self.n = 4
+        self.N = 4
+        self.z = [sp.var(f"z_{i}") for i in range(self.N)]
+        self.name = "DoublePendulum"
+        # if 1:
+        #     self.get_rhs()
+        # else:
+        #     with open(f"models/{self.name}/double_pendulum_rhs.pcl", "rb") as f:
+        #         self.rhs = pickle.load(f)
+        self.trig_state = True
+        self.alpha_limit = 1000
+        super().__init__()
+
+    def get_output(self, x):
+        return x[0]
+
+    def get_approx_region(self):
+        return [[-np.pi, np.pi], [-np.pi, np.pi], [-30, 30], [-100,100]]
+
+    def rhs(self, t, state):
+        x1, x2, x3, x4 = state
+        return np.array([x3, x4, -4.0*(-0.125*x3**2*sin(x2) - 2.4525*sin(x1 + x2))*(0.5*cos(x2) + 0.25)*(0.25*sin(x2)**2 + 0.0625)**-1 + (0.25*x3*x4*sin(x2) + 0.125*x4**2*sin(x2) - 7.3575*sin(x1) - 2.4525*sin(x1 + x2))*(0.25*sin(x2)**2 + 0.0625)**-1, 16.0*(-0.125*x3**2*sin(x2) - 2.4525*sin(x1 + x2))*(0.25*cos(x2) + 0.375)*(0.25*sin(x2)**2 + 0.0625)**-1 - 4.0*(0.5*cos(x2) + 0.25)*(0.25*x3*x4*sin(x2) + 0.125*x4**2*sin(x2) - 7.3575*sin(x1) - 2.4525*sin(x1 + x2))*(0.25*sin(x2)**2 + 0.0625)**-1])
+
+    def get_x_data(self):
+        # x0_list = [[-1,0,0,0],
+        #            [2,0,0,0],
+        #            [-3,0,0,0],
+        #            [0,1,0,0],
+        #            [0,-2,0,0],
+        #            [0,3,0,0]]
+        x0_list = [[-0.1,0,0,0],
+                   [0.05,0,0,0.1],
+                   [0.13,0,0.01,0],
+                   [0.08, 0.1, 0.1, 0.01],
+                   ]
+        x_data = None
+        tend = 30
+        tt = np.linspace(0, tend, 6000)
+        for x0 in x0_list:
+            s = solve_ivp(self.rhs, (0, tend), x0, t_eval=tt)
+            if x_data is None:
+                x_data = s.y
+            else:
+                x_data = np.concatenate((x_data, s.y), axis=1)
+        return x_data
+
+
+class DoublePendulum2(System):
+    def __init__(self) -> None:
+        self.x1, self.x2, self.x3, self.x4, self.x5, self.x6 = self.x = sp.symbols("x1, x2, x3, x4, x5, x6")
+        self.pp = sp.var("p1, p2, p3, p4, p5, p6")
+        # \dot{x} = f(x) + g(x)*u
+        self.h_symb = self.x6
+        self.n = 6
+        self.N = 7
+        self.z = [sp.var(f"z_{i}") for i in range(self.N)]
+        self.name = "DoublePendulum2"
+        # if 1:
+        #     self.get_rhs()
+        # else:
+        with open(f"models/{self.name}/pdot.pcl", "rb") as f:
+            pdot = pickle.load(f)
+        # self.pdot_func = sp.lambdify(self.pp, pdot)
+        with open(f"models/{self.name}/p.pcl", "rb") as f:
+            self.p_symb = pickle.load(f)
+        self.p_x = sp.lambdify(self.x[:4], self.p_symb)#
+
+        self.f_symb = pdot.subs(zip(self.pp, self.x))
+        # self.trig_state = True
+        self.alpha_limit = 1000
+        super().__init__()
+
+    def get_output(self, x):
+        return x[5]
+
+    def get_approx_region(self):
+        return [[-np.pi, np.pi], [-np.pi, np.pi], [-30, 30], [-100,100]]
+
+    def rhs(self, t, x):
+        p1, p2, p3, p4, p5, p6 = x
+        return np.array([
+            -p2*p5,
+            p1*p5,
+            -2.0*p2*p5-16.0*(p5+p6)*(p1*(p1*p4-p2*p3)+p2*(p1*p3+p2*p4-0.125)),
+            2.0*p1*p5+16.0*(p5+p6)*(p1*(p1*p3+p2*p4-0.125)-p2*(p1*p4-p2*p3)),
+            (-156.96*p1*(p1*p3+p2*p4-0.125)-29.43*p1+156.96*p2*(p1*p4-p2*p3)+4.0*p5*p6*(p1*p4-p2*p3)+2.0*p6**2*(p1*p4-p2*p3)+4.0*(8.0*p1*p3+8.0*p2*p4-0.75)*(156.96*p1*(p1*p3+p2*p4-0.125)-156.96*p2*(p1*p4-p2*p3)+2.0*p5**2*(p1*p4-p2*p3)))*(64.0*(p1*p4-p2*p3)**2+0.0625)**(-1),
+            (-16.0*(4.0*p1*p3+4.0*p2*p4-0.125)*(156.96*p1*(p1*p3+p2*p4-0.125)-156.96*p2*(p1*p4-p2*p3)+2.0*p5**2*(p1*p4-p2*p3))-4.0*(8.0*p1*p3+8.0*p2*p4-0.75)*(-156.96*p1*(p1*p3+p2*p4-0.125)-29.43*p1+156.96*p2*(p1*p4-p2*p3)+4.0*p5*p6*(p1*p4-p2*p3)+2.0*p6**2*(p1*p4-p2*p3)))*(64.0*(p1*p4-p2*p3)**2+0.0625)**(-1)])
+
+    def get_x_data(self):
+        np.random.seed(2)
+        # phi0 = np.random.random(size=10)*np.pi*2
+        # phi1 = np.random.random(size=10)*np.pi*2
+        # w0 = (np.random.random(size=10) - 0.5)*2
+        # w1 = (np.random.random(size=10) - 0.5)*2
+        phi0 = (np.random.random(size=10)-0.5)*2
+        phi1 = np.zeros(10)
+        w0 = np.zeros(10)
+        w1 = np.zeros(10)
+        x0_list = self.p_x(phi0, phi1, w0, w1).T[:,0,:]
+        # x0_list = np.concatenate((x0_list, np.array([[1,0,0.1],[1,0,-0.2]])), axis=0)
+        x_data = None
+        tend = 30
+        tt = np.linspace(0, tend, 6000)
+        for x0 in x0_list:
+            s = solve_ivp(self.rhs, (0, tend), x0, t_eval=tt)
+            if x_data is None:
+                x_data = s.y
+            else:
+                x_data = np.concatenate((x_data, s.y), axis=1)
+        return x_data
