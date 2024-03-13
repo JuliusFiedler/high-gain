@@ -12,23 +12,15 @@ from systems import *
 from net import Net
 
 def test(system: System):
-    seed = 1
 
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+    rhs = system.rhs
+    output = system.get_output
+    # def rhs(t, state):
+    #     x1, x2, x3, x4 = state
+    #     return np.array([x3, x4, np.sin(x1), x2*x1**(-1)])
 
-    num_interpolation_points = 100
-
-    # choose sample coords in x
-    limits = system.get_approx_region()
-    mesh_index = []
-    for i in range(len(limits)):
-        mesh_index.append(np.linspace(*limits[i], num_interpolation_points))
-    meshgrid = np.meshgrid(*mesh_index) # shape [(NIP, NIP, ..), (NIP, NIP, ..)]
-
-    # calculate alpha(x)
-    alpha_func = system.get_alpha_of_x_func()
-    alpha = alpha_func(*meshgrid) # shape (NIP, NIP, ..)
+    def output(state):
+        return state[0]
 
     Tape_F = 0
     Tape_H = 1
@@ -38,7 +30,7 @@ def test(system: System):
     af = [adolc.adouble() for _ in range(n)]
     for i in range(n):
         af[i].declareIndependent()
-    vf = system.rhs(0, af)
+    vf = rhs(0, af)
     for a in vf:
         a.declareDependent()
     adolc.trace_off()
@@ -48,19 +40,15 @@ def test(system: System):
     ah = [adolc.adouble() for _ in range(n)]
     for i in range(n):
         ah[i].declareIndependent()
-    vh = system.get_output(ah)
+    vh = output(ah)
     vh.declareDependent()
     adolc.trace_off()
 
 
     d = 5
-    # x, y, z = meshgrid
-    # points = np.vstack((x.ravel(), y.ravel(), z.ravel())).T
-    points = np.vstack([x.ravel() for x in meshgrid]).T
-    for i, x0 in enumerate(points):
-        lie = adolc.lie_scalarc(Tape_F, Tape_H, x0, d)
-        if i % 1000 == 0:
-            print(i)
+    x0 = np.ones(n)
+    lie = adolc.lie_scalarc(Tape_F, Tape_H, x0, d)
     IPS()
 
-test(Roessler())
+
+test(DoublePendulum())
