@@ -11,105 +11,92 @@ import adolc
 from systems import *
 from net import Net
 import time
+import util as u
 
-def train(system: System):
+def train(system: System, noise=False):
+    if noise:
+        system.add_path += "_noise"
     seed = 1
 
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    num_interpolation_points = 20
 
     # choose sample coords in x
-    limits = system.get_approx_region()
-    mesh_index = []
-    for i in range(len(limits)):
-        mesh_index.append(np.linspace(*limits[i], num_interpolation_points))
-    meshgrid = np.meshgrid(*mesh_index) # shape [(NIP, NIP, ..), (NIP, NIP, ..)]
-
-    # t1 = time.time()
-    # symbolic calculation
-    if 0:
-        # calculate alpha(x)
-        alpha_func = system.get_alpha_of_x_func()
-        alpha = alpha_func(*meshgrid) # shape (NIP, NIP, ..)
-
-        # calculate z(x)
-        q_func = system.get_q_func()
-        z_data = q_func(*meshgrid)[:,0] # shape (N, NIP, NIP, ...)
-
-        # shape data
-        inputs = z_data.reshape(system.N, num_interpolation_points**system.n) # shape (N, NIP**n)
-        labels = np.empty((system.n+1, num_interpolation_points**system.n)) # shape (n+1, NIP**n)
-        labels[:-1, :] = [m.reshape(num_interpolation_points**system.n) for m in meshgrid]
-        labels[-1, :] = alpha.reshape(num_interpolation_points**system.n)
-
-    # t2 = time.time()
-    # print("symbolic", t2-t1)
-    # automatic differentiation
+    if hasattr(system, "get_x_data"):
+        print("using trajectory data")
+        points = system.get_x_data().T
     else:
-        Tape_F = 0
-        Tape_H = 1
+        print("using grid")
+        num_interpolation_points = 20
 
-        n = system.n
-        adolc.trace_on(Tape_F)
-        af = [adolc.adouble() for _ in range(n)]
-        for i in range(n):
-            af[i].declareIndependent()
-        vf = system.rhs(0, af)
-        for a in vf:
-            a.declareDependent()
-        adolc.trace_off()
-
-        adolc.trace_on(Tape_H)
-        ah = [adolc.adouble() for _ in range(n)]
-        for i in range(n):
-            ah[i].declareIndependent()
-        vh = system.get_output(ah)
-        vh.declareDependent()
-        adolc.trace_off()
-
-        d = system.N
-        lie_derivs = []
-        if hasattr(system, "get_x_data"):
-            print("using trajectory data")
-            points = system.get_x_data().T
-        else:
-            print("using grid")
-            points = np.vstack([x.ravel() for x in meshgrid]).T
-        for i, x0 in enumerate(points):
-            lie = adolc.lie_scalarc(Tape_F, Tape_H, x0, d)
-            if system.alpha_limit:
-                if lie[-1] > system.alpha_limit:
-                    lie[-1] = system.alpha_limit
-            lie_derivs.append(lie)
-
-        lie_derivs = np.array(lie_derivs)
-
-        inputs = lie_derivs[:,:-1].T
-        labels = np.empty((system.n+1, points.shape[0])) # shape (n+1, NIP**n)
-        labels[:-1, :] = points.T
-        labels[-1, :] = lie_derivs[:, -1]
-
-        # IPS()
-        if system.trig_state:
-            labels_new = np.zeros((labels.shape[0]+2, labels.shape[1]))
-            labels_new[0] = np.cos(labels[0])
-            labels_new[1] = np.sin(labels[0])
-            labels_new[2] = np.cos(labels[1])
-            labels_new[3] = np.sin(labels[1])
-            labels_new[4:] = labels[2:]
-            labels = labels_new
-
-    # t3 = time.time()
-
-    # print("adolc", t3-t2)
-    # calculate beta(x)
-    # if hasattr(system, "q_symb"):
-    #     beta_func = system.get_beta_of_x_func()
-    #     beta = beta_func(*meshgrid)
+        limits = system.get_approx_region()
+        mesh_index = []
+        for i in range(len(limits)):
+            mesh_index.append(np.linspace(*limits[i], num_interpolation_points))
+        meshgrid = np.meshgrid(*mesh_index) # shape [(NIP, NIP, ..), (NIP, NIP, ..)]
+        points = np.vstack([x.ravel() for x in meshgrid]).T
 
 
+    Tape_F = 0
+    Tape_H = 1
+
+    n = system.n
+    adolc.trace_on(Tape_F)
+    af = [adolc.adouble() for _ in range(n)]
+    for i in range(n):
+        af[i].declareIndependent()
+    vf = system.rhs(0, af)
+    for a in vf:
+        a.declareDependent()
+    adolc.trace_off()
+
+    adolc.trace_on(Tape_H)
+    ah = [adolc.adouble() for _ in range(n)]
+    for i in range(n):
+        ah[i].declareIndependent()
+    vh = system.get_output(ah)
+    vh.declareDependent()
+    adolc.trace_off()
+
+    d = system.N
+    lie_derivs = []
+
+    for i, x0 in enumerate(points):
+        lie = adolc.lie_scalarc(Tape_F, Tape_H, x0, d)
+        if system.alpha_limit:
+            if np.abs(lie[-1]) > system.alpha_limit:
+                lie[-1] = np.sign(lie[-1]) * system.alpha_limit
+        lie_derivs.append(lie)
+
+    lie_derivs = np.array(lie_derivs)
+
+    inputs = lie_derivs[:,:-1].T
+    labels = np.empty((system.n+1, points.shape[0])) # shape (n+1, NIP**n)
+    labels[:-1, :] = points.T
+    labels[-1, :] = lie_derivs[:, -1]
+
+    # IPS()
+    if noise:
+        inputs = inputs + np.random.normal(0, 1e-3, size=inputs.shape)
+        labels = labels + np.random.normal(0, 1e-3, size=labels.shape)
+
+    # IPS()
+    if system.trig_state:
+        labels_new = np.zeros((labels.shape[0]+2, labels.shape[1]))
+        labels_new[0] = np.cos(labels[0])
+        labels_new[1] = np.sin(labels[0])
+        labels_new[2] = np.cos(labels[1])
+        labels_new[3] = np.sin(labels[1])
+        labels_new[4:] = labels[2:]
+        labels = labels_new
+    # IPS()
+    if system.log == True:
+        print("using log scaler")
+        log_scaler = u.LogScaler()
+        inputs = log_scaler.scale_down(inputs)
+        labels[-1] = log_scaler.scale_down(labels[-1])
+    # IPS()
     # scale data
     scaler_in = MinMaxScaler(feature_range=(-1, 1))
     scaler_lab = MinMaxScaler(feature_range=(-1, 1))
@@ -148,15 +135,16 @@ def train(system: System):
         IPS()
 
     print('Training finished')
-    path = os.path.join("models", system.name, "model_state_dict.pth")
+    path = os.path.join("models", system.name, system.add_path, "model_state_dict.pth")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     torch.save(net.state_dict(), path)
 
-    joblib.dump(scaler_in, os.path.join("models", system.name, 'scaler_in.pkl'))
-    joblib.dump(scaler_lab, os.path.join("models", system.name, 'scaler_lab.pkl'))
+    joblib.dump(scaler_in, os.path.join("models", system.name, system.add_path, 'scaler_in.pkl'))
+    joblib.dump(scaler_lab, os.path.join("models", system.name, system.add_path, 'scaler_lab.pkl'))
     # IPS()
 
     get_lipschitz_const(net)
+    IPS()
 
 def get_lipschitz_const(net):
 
@@ -214,13 +202,15 @@ def get_lipschitz_const(net):
 # system = Lorenz()
 # system = Roessler()
 # system = DoublePendulum()
-system = DoublePendulum2()
-# system = InvPendulum2()
+# system = DoublePendulum2()
+system = InvPendulum2()
 ################################################################################
 
 
+# system.add_path = f"alphalimit_{system.alpha_limit}_N{system.N}"
+system.add_path = f"measure_{system.h_symb}_N{system.N}"
 
-train(system)
+train(system, noise=False)
 
 
 # net = Net(n=system.n, N=system.N)

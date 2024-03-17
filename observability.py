@@ -19,7 +19,7 @@ def test(system: System):
 
 
     def output(state):
-        return state[0]
+        return state[1]
 
     Tape_F = 0
     Tape_H = 1
@@ -44,29 +44,44 @@ def test(system: System):
     adolc.trace_off()
 
     np.random.seed(2)
-    d = 5
-    phi0 = (np.random.random(size=10)-0.5)*2
-    phi1 = np.zeros(10)
-    w0 = np.zeros(10)
-    w1 = np.zeros(10)
-    w0[-1] = 1
-    w1[-2] = 1
-    w0[-3] = -1
-    w1[-3] = -1
-    x0_list = np.array([phi0, phi1, w0, w1])
-    x0_list = np.concatenate((x0_list, np.array([
-        [0,0,      1 ],
-        [0,np.pi,  0 ],
-        [0,0,  0.1 ],
-        [0,0, 0.1]
-    ])), axis=1)
-    x0_list = np.concatenate((x0_list, np.array([
-        (np.random.random(size=10)-0.5)*np.pi,
-        (np.random.random(size=10)-0.5)*np.pi,
-        (np.random.random(size=10)-0.5)*2,
-        (np.random.random(size=10)-0.5)*2
-    ])), axis=1)
-    p0_list = system.p_x(*x0_list).T[:,0,:]
+    d = 2
+    if system.name == "DoublePendulum2":
+        phi0 = (np.random.random(size=10)-0.5)*2
+        phi1 = np.zeros(10)
+        w0 = np.zeros(10)
+        w1 = np.zeros(10)
+        w0[-1] = 1
+        w1[-2] = 1
+        w0[-3] = -1
+        w1[-3] = -1
+        x0_list = np.array([phi0, phi1, w0, w1])
+        x0_list = np.concatenate((x0_list, np.array([
+            [0,0,      1 ],
+            [0,np.pi,  0 ],
+            [0,0,  0.1 ],
+            [0,0, 0.1]
+        ])), axis=1)
+        x0_list = np.concatenate((x0_list, np.array([
+            (np.random.random(size=10)-0.5)*np.pi,
+            (np.random.random(size=10)-0.5)*np.pi,
+            (np.random.random(size=10)-0.5)*2,
+            (np.random.random(size=10)-0.5)*2
+        ])), axis=1)
+        p0_list = system.p_x(*x0_list).T[:,0,:]
+    else:
+        phi0 = (np.random.random(size=10)-0.5)*2*np.pi
+        w0 = (np.random.random(size=10)-0.5)*5
+        w0[-1] = 0
+        x0_list = np.array([np.sin(phi0), -np.cos(phi0), w0])
+        p0_list = np.concatenate((x0_list.T, np.array([
+            [1,0,      0 ],
+            [0, -1,  0 ],
+            [0,-1,  0.1 ],
+            [0,1, 0.1],
+            [0,1, 0]
+        ])), axis=0)
+
+
     for p0 in p0_list:
         lie = adolc.lie_gradientc(Tape_F, Tape_H, p0, d)
         rank = np.linalg.matrix_rank(lie)
@@ -74,4 +89,5 @@ def test(system: System):
     # IPS()
     IPS()
 
-test(DoublePendulum2())
+# test(DoublePendulum2())
+test(InvPendulum2())

@@ -11,6 +11,8 @@ class System:
     def __init__(self) -> None:
         self.trig_state = False
         self.alpha_limit = None
+        self.log = False
+        self.separate = False
         pass
 
     @abstractmethod
@@ -207,9 +209,9 @@ class InvPendulum2(System):
         J = 0.01
         self.kappa = m*g*l/(J+m*l**2)
         self.f_symb = sp.Matrix([-self.x2*self.x3, self.x1*self.x3, -self.kappa*self.x1])
-        self.h_symb = self.x2
+        self.h_symb = self.x3
         self.n = len(self.x)
-        self.N = 5
+        self.N = 2
         self.z = [sp.var(f"z_{i}") for i in range(self.N)]
         self.name = "InvPendulum2"
         super().__init__()
@@ -218,10 +220,7 @@ class InvPendulum2(System):
         return [-x[1]*x[2], x[0]*x[2], -self.kappa*x[0]]
 
     def get_output(self, x):
-        return x[1]
-
-    def get_input(self, x):
-        return 1
+        return x[2]
 
     def get_approx_region(self):
         return [[-2.5, 2.5], [-2.5, 2.5]]
@@ -257,9 +256,9 @@ class DoublePendulum(System):
         # else:
         #     with open(f"models/{self.name}/double_pendulum_rhs.pcl", "rb") as f:
         #         self.rhs = pickle.load(f)
+        super().__init__()
         self.trig_state = True
         self.alpha_limit = 1000
-        super().__init__()
 
     def get_output(self, x):
         return x[0]
@@ -302,7 +301,7 @@ class DoublePendulum2(System):
         # \dot{x} = f(x) + g(x)*u
         self.h_symb = self.x6
         self.n = 6
-        self.N = 7
+        self.N = 9
         self.z = [sp.var(f"z_{i}") for i in range(self.N)]
         self.name = "DoublePendulum2"
         # if 1:
@@ -316,9 +315,10 @@ class DoublePendulum2(System):
         self.p_x = sp.lambdify(self.x[:4], self.p_symb)#
 
         self.f_symb = pdot.subs(zip(self.pp, self.x))
-        # self.trig_state = True
-        self.alpha_limit = 1000
         super().__init__()
+        # self.alpha_limit = 10
+        # self.log = True
+        self.separate = True
 
     def get_output(self, x):
         return x[5]
