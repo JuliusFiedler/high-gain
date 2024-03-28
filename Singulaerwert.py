@@ -42,7 +42,11 @@ def test_poles(system, poles):
     print("Maximum Singular Value (H∞-norm):", max_singular_value)
 
 
-system = DoublePendulum2()
+system = MagneticPendulum()
+# system = DoublePendulum2()
 
-poles = np.ones(system.N) * -200
+poles = np.ones(system.N) * -50
+l = input("enter lipschitz konstant")
 test_poles(system, poles)
+print(1/float(l))
+IPS()

@@ -16,7 +16,7 @@ activate_ips_on_exception()
 add_path = None
 noise = False
 ######################################################
-s = 7
+s = 6
 if s == 1:
     system = UndampedHarmonicOscillator()
     # L = np.array([40, 600, 4000, 10000])
@@ -47,17 +47,17 @@ if s == 5:
 if s == 6:
     system = DoublePendulum()
     L = u.get_coefs(np.ones(system.N) * -200)
-    x0 = np.array([-0.1, 0, 0, 0])
+    x0 = np.array([-0.11, 0, 0, 0])
     z_hat0 = np.zeros(system.N)
-    # add_path = f"N{system.N}"
+    add_path = f"measure_x1_N4"
 if s == 7:
     system = InvPendulum2()
     L = u.get_coefs(np.ones(system.N) * -200)
-    phi = np.pi/2
+    phi = np.pi/2 +0.1
     x0 = np.array([np.sin(phi), -np.cos(phi), 0])
 
     z_hat0 = np.zeros(system.N)
-    add_path = f"measure_x3_N2"
+    add_path = f"measure_x3_N4"
     # noise = True
 
 if s == 8:
@@ -69,9 +69,17 @@ if s == 8:
     add_path = f"separate_nets__alphalimit_None_N9"
     # add_path = f"N7"
 
+if s == 9:
+    system = MagneticPendulum()
+    L = u.get_coefs(np.ones(system.N) * -50)
+    x0 = np.array([1.5, 1.5, 0, 0])
+    z_hat0 = np.zeros(system.N)
+    add_path = f"measure_x1_N5"
+    # system.separate = True
+
 # IPS()
-t_span = (0, 5)
-t_eval = np.linspace(t_span[0], t_span[1], 5000)
+t_span = (0, 10)
+t_eval = np.linspace(t_span[0], t_span[1], 10000)
 ######################################################
 
 folder_path = os.path.join("models", system.name)
@@ -82,7 +90,7 @@ model_path = os.path.join(folder_path, "model_state_dict.pth")
 if system.separate:
     model_alpha = Net(n=0, N=system.N)
     model_alpha.load_state_dict(torch.load(os.path.join(folder_path, "al_model_state_dict.pth")))
-    model_q = Net(n=system.n-1, N=7)
+    model_q = Net(n=system.n-1, N=system.N)
     model_q.load_state_dict(torch.load(os.path.join(folder_path, "q_model_state_dict.pth")))
     scaler_in_al = joblib.load(os.path.join(folder_path, 'al_scaler_in.pkl'))
     scaler_lab_al = joblib.load(os.path.join(folder_path, 'al_scaler_lab.pkl'))
@@ -353,6 +361,24 @@ elif system.name == "DoublePendulum2":
     ax.scatter(*G2_[:,0], color="tab:orange")
 
     plt.ylim(-1, 0.5)
+    ax.set_aspect('equal', 'box')
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+elif system.name == "MagneticPendulum":
+    fig = plt.figure()
+    # inner arm G1
+    ax = fig.add_subplot(111)
+    # system
+    ax.plot(x_solution[0], x_solution[1], color="tab:blue", label="system")
+    ax.scatter(x_solution[0,0], x_solution[1,0], color="tab:blue")
+    # observer
+    ax.plot(x_hat[:,0], x_hat[:,1], color="tab:orange", label="observer", alpha=0.5)
+    ax.scatter(x_hat[0,0], x_hat[1,0], color="tab:orange")
+
+    # magnets
+    ax.scatter(*system.magnet_positions.T, color="red", label="repelling magnets")
+    plt.ylim(-3, 3)
+    plt.xlim(-3, 3)
     ax.set_aspect('equal', 'box')
     ax.set_xlabel("x")
     ax.set_ylabel("y")

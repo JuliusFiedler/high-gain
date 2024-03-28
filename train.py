@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-from ipydex import IPS
+from ipydex import IPS, activate_ips_on_exception
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import TensorDataset, DataLoader
 import joblib
@@ -13,7 +13,12 @@ from net import Net
 import time
 import util as u
 
-def train(system: System, noise=False):
+activate_ips_on_exception()
+
+def train(system: System, train: str, noise=False):
+    assert train in ["all", "q", "alpha"]
+    if train != "all":
+        system.add_path += "_sep"
     if noise:
         system.add_path += "_noise"
     seed = 1
@@ -72,24 +77,20 @@ def train(system: System, noise=False):
     lie_derivs = np.array(lie_derivs)
 
     inputs = lie_derivs[:,:-1].T
-    labels = np.empty((system.n+1, points.shape[0])) # shape (n+1, NIP**n)
-    labels[:-1, :] = points.T
-    labels[-1, :] = lie_derivs[:, -1]
+    if train == "all":
+        labels = np.empty((system.n+1, points.shape[0])) # shape (n+1, NIP**n)
+        labels[:-1, :] = points.T
+        labels[-1, :] = lie_derivs[:, -1]
 
-    # IPS()
+    elif train == "q":
+        labels = points.T
+    elif train == "alpha":
+        labels = np.empty((1, points.shape[0])) # shape (n+1, NIP**n)
+        labels[-1, :] = lie_derivs[:, -1]
+
     if noise:
         inputs = inputs + np.random.normal(0, 1e-3, size=inputs.shape)
         labels = labels + np.random.normal(0, 1e-3, size=labels.shape)
-
-    # IPS()
-    if system.trig_state:
-        labels_new = np.zeros((labels.shape[0]+2, labels.shape[1]))
-        labels_new[0] = np.cos(labels[0])
-        labels_new[1] = np.sin(labels[0])
-        labels_new[2] = np.cos(labels[1])
-        labels_new[3] = np.sin(labels[1])
-        labels_new[4:] = labels[2:]
-        labels = labels_new
     # IPS()
     if system.log == True:
         print("using log scaler")
@@ -111,9 +112,13 @@ def train(system: System, noise=False):
     batch_size = 50
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    net = Net(n=system.n, N=system.N)
-    if system.trig_state:
-        net = Net(n=system.n+2, N=system.N)
+    if train == "all":
+        net = Net(n=system.n, N=system.N)
+    elif train == "q":
+        net = Net(n=system.n-1, N=system.N)
+    elif train == "alpha":
+        net = Net(n=0, N=system.N)
+
 
     criterion = nn.MSELoss()
     optimizer = optim.Adam(net.parameters(), lr=0.001)
@@ -135,15 +140,25 @@ def train(system: System, noise=False):
         IPS()
 
     print('Training finished')
-    path = os.path.join("models", system.name, system.add_path, "model_state_dict.pth")
+    if train == "all":
+        note = ""
+    elif train == "q":
+        note = "q_"
+    elif train == "alpha":
+        note = "al_"
+    folder_path = os.path.join("models", system.name, system.add_path)
+    path = os.path.join(folder_path, note + "model_state_dict.pth")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     torch.save(net.state_dict(), path)
 
-    joblib.dump(scaler_in, os.path.join("models", system.name, system.add_path, 'scaler_in.pkl'))
-    joblib.dump(scaler_lab, os.path.join("models", system.name, system.add_path, 'scaler_lab.pkl'))
+    joblib.dump(scaler_in, os.path.join("models", system.name, system.add_path, note + 'scaler_in.pkl'))
+    joblib.dump(scaler_lab, os.path.join("models", system.name, system.add_path, note + 'scaler_lab.pkl'))
     # IPS()
+    with open(os.path.join(folder_path, "notes.txt"), "at") as f:
+        f.write("last loss:", str(avg_loss))
 
-    get_lipschitz_const(net)
+    if train != "q":
+        get_lipschitz_const(net)
     IPS()
 
 def get_lipschitz_const(net):
@@ -203,14 +218,14 @@ def get_lipschitz_const(net):
 # system = Roessler()
 # system = DoublePendulum()
 # system = DoublePendulum2()
-system = InvPendulum2()
+# system = InvPendulum2()
+system = MagneticPendulum()
 ################################################################################
 
 
-# system.add_path = f"alphalimit_{system.alpha_limit}_N{system.N}"
 system.add_path = f"measure_{system.h_symb}_N{system.N}"
 
-train(system, noise=False)
+train(system, train="all", noise=False)
 
 
 # net = Net(n=system.n, N=system.N)

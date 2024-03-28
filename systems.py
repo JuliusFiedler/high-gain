@@ -52,6 +52,15 @@ class System:
             beta[i] = st.lie_deriv(st.lie_deriv(self.h_symb, self.f_symb, self.x, order=i), self.g_symb, self.x)
         return sp.lambdify(self.x, beta)
 
+    def simulate(self, x0_list, tt):
+        x_data = None
+        for x0 in x0_list:
+            s = solve_ivp(self.rhs, (0, tt[-1]), x0, t_eval=tt)
+            if x_data is None:
+                x_data = s.y
+            else:
+                x_data = np.concatenate((x_data, s.y), axis=1)
+        return x_data
 
 class UndampedHarmonicOscillator(System):
     def __init__(self) -> None:
@@ -211,7 +220,7 @@ class InvPendulum2(System):
         self.f_symb = sp.Matrix([-self.x2*self.x3, self.x1*self.x3, -self.kappa*self.x1])
         self.h_symb = self.x3
         self.n = len(self.x)
-        self.N = 2
+        self.N = 4
         self.z = [sp.var(f"z_{i}") for i in range(self.N)]
         self.name = "InvPendulum2"
         super().__init__()
@@ -234,13 +243,7 @@ class InvPendulum2(System):
         x_data = None
         tend = 30
         tt = np.linspace(0, tend, 6000)
-        for x0 in x0_list:
-            s = solve_ivp(self.rhs, (0, tend), x0, t_eval=tt)
-            if x_data is None:
-                x_data = s.y
-            else:
-                x_data = np.concatenate((x_data, s.y), axis=1)
-        return x_data
+        return self.simulate(x0_list, tt)
 
 class DoublePendulum(System):
     def __init__(self) -> None:
@@ -257,8 +260,8 @@ class DoublePendulum(System):
         #     with open(f"models/{self.name}/double_pendulum_rhs.pcl", "rb") as f:
         #         self.rhs = pickle.load(f)
         super().__init__()
-        self.trig_state = True
-        self.alpha_limit = 1000
+        # self.trig_state = True
+        # self.alpha_limit = 1000
 
     def get_output(self, x):
         return x[0]
@@ -285,13 +288,7 @@ class DoublePendulum(System):
         x_data = None
         tend = 30
         tt = np.linspace(0, tend, 6000)
-        for x0 in x0_list:
-            s = solve_ivp(self.rhs, (0, tend), x0, t_eval=tt)
-            if x_data is None:
-                x_data = s.y
-            else:
-                x_data = np.concatenate((x_data, s.y), axis=1)
-        return x_data
+        return self.simulate(x0_list, tt)
 
 
 class DoublePendulum2(System):
@@ -351,10 +348,61 @@ class DoublePendulum2(System):
         x_data = None
         tend = 30
         tt = np.linspace(0, tend, 6000)
-        for x0 in x0_list:
-            s = solve_ivp(self.rhs, (0, tend), x0, t_eval=tt)
-            if x_data is None:
-                x_data = s.y
+        return self.simulate(x0_list, tt)
+
+class MagneticPendulum(System):
+    """
+    Source:
+    Motter, Gruiz, et. al.: 'Doubly Transient Chaos: The Generic Form of Chaos in Autonomous Dissipative Systems'
+    https://arxiv.org/pdf/1310.4209.pdf
+    """
+    def __init__(self):
+        self.n_charges = n_charges = 3
+        self.charges = np.ones(n_charges, dtype=float) * -1
+        if n_charges == 1:
+            self.magnet_positions = np.array([[0,0]])
+        else:
+            self.magnet_positions = np.array([[np.cos(phi), np.sin(phi)] for phi in [i*2*np.pi/n_charges for i in np.arange(n_charges)]])
+        self.h = 0.5
+        self.b = 0.1
+
+        self.x1, self.x2, self.x3, self.x4 = self.x = sp.symbols("x1, x2, x3, x4")
+        self.h_symb = self.x1
+        self.n = 4
+        self.N = 5
+        self.z = [sp.var(f"z_{i}") for i in range(self.N)]
+        self.name = "MagneticPendulum"
+        super().__init__()
+
+    def get_output(self, x):
+        return x[0]
+
+    def get_approx_region(self):
+        return [[-np.pi, np.pi], [-np.pi, np.pi], [-30, 30], [-100,100]]
+
+    def rhs(self, t, x):
+        s = None
+        for pos, p in zip(self.magnet_positions, self.charges):
+            v = p * (pos- x[0:2]) * ((pos[0]-x[0])**2 + (pos[1]-x[1])**2 + self.h**2)**(-3/2)
+            if s is None:
+                s = v
             else:
-                x_data = np.concatenate((x_data, s.y), axis=1)
-        return x_data
+                s += v
+
+        dx1 = x[2]
+        dx2 = x[3]
+        dx3 = s[0] - self.b*x[2] - x[0]
+        dx4 = s[1] - self.b*x[3] - x[1]
+
+        return np.array([dx1, dx2, dx3, dx4])
+
+    def get_x_data(self):
+        np.random.seed(2)
+        n = 30
+        x = (np.random.random(size=(2,n))-0.5)*4
+        w = np.zeros((2,n))
+        x0_list = np.array([*x, *w]).T
+        # x0_list = np.concatenate((x0_list, np.array([[1,0,0.1],[1,0,-0.2]])), axis=0)
+        tend = 30
+        tt = np.linspace(0, tend, 6000)
+        return self.simulate(x0_list, tt)

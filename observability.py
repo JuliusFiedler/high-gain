@@ -44,7 +44,7 @@ def test(system: System):
     adolc.trace_off()
 
     np.random.seed(2)
-    d = 2
+    d = 3
     if system.name == "DoublePendulum2":
         phi0 = (np.random.random(size=10)-0.5)*2
         phi1 = np.zeros(10)
@@ -68,6 +68,17 @@ def test(system: System):
             (np.random.random(size=10)-0.5)*2
         ])), axis=1)
         p0_list = system.p_x(*x0_list).T[:,0,:]
+    elif system.name == "DoublePendulum":
+        p0_list = [[-0.1,0,0,0],
+                   [0.05,0,0,0.1],
+                   [0.13,0,0.01,0],
+                   [0.08, 0.1, 0.1, 0.01],
+                   [0.0, 0., 0., 0.01],
+                   [0.0, 0., 0.1, 0.0],
+                   [0.08, 0.1, 0.1, 0.01],
+                   ]
+    elif system.name == "MagneticPendulum":
+        p0_list = (np.random.random((10,4))-0.5)*4
     else:
         phi0 = (np.random.random(size=10)-0.5)*2*np.pi
         w0 = (np.random.random(size=10)-0.5)*5
@@ -89,5 +100,6 @@ def test(system: System):
     # IPS()
     IPS()
 
+test(MagneticPendulum())
 # test(DoublePendulum2())
-test(InvPendulum2())
+# test(InvPendulum2())
