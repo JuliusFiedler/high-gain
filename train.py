@@ -9,13 +9,15 @@ from torch.utils.data import TensorDataset, DataLoader
 import joblib
 import adolc
 from systems import *
-from net import Net
+from net import Net, NetQ
 import time
 import util as u
 
 activate_ips_on_exception()
 
-def train(system: System, train: str, noise=False):
+def train(system: System, train: str, num_epoch=100, noise=False):
+    if system.name == "MagneticPendulum":
+        system.add_path = f"p{system.charges[0]}_" + system.add_path
     assert train in ["all", "q", "alpha"]
     if train != "all":
         system.add_path += "_sep"
@@ -115,14 +117,13 @@ def train(system: System, train: str, noise=False):
     if train == "all":
         net = Net(n=system.n, N=system.N)
     elif train == "q":
-        net = Net(n=system.n-1, N=system.N)
+        net = NetQ(n=system.n, N=system.N)
     elif train == "alpha":
         net = Net(n=0, N=system.N)
 
 
     criterion = nn.MSELoss()
     optimizer = optim.Adam(net.parameters(), lr=0.001)
-    num_epoch = 100
     print("start Training")
     try:
         for epoch in range(num_epoch):
@@ -155,11 +156,13 @@ def train(system: System, train: str, noise=False):
     joblib.dump(scaler_lab, os.path.join("models", system.name, system.add_path, note + 'scaler_lab.pkl'))
     # IPS()
     with open(os.path.join(folder_path, "notes.txt"), "at") as f:
-        f.write("last loss:", str(avg_loss))
+        f.write(train + " last loss: " + str(round(avg_loss, 7)) + "\n")
 
     if train != "q":
-        get_lipschitz_const(net)
-    IPS()
+        gamma = get_lipschitz_const(net)
+        with open(os.path.join(folder_path, "notes.txt"), "at") as f:
+            f.write("gamma: " + str(round(gamma, 7)) + "\n")
+    # IPS()
 
 def get_lipschitz_const(net):
 
@@ -209,6 +212,7 @@ def get_lipschitz_const(net):
         # gamma = delta alpha / delta z
         gamma = max(gamma, np.abs((alphaa - alphab) / np.linalg.norm(za-zb)))
     print("Lipschitz constant approx.:", gamma)
+    return gamma
 
 ################################################################################
 # system = UndampedHarmonicOscillator()
@@ -225,8 +229,17 @@ system = MagneticPendulum()
 
 system.add_path = f"measure_{system.h_symb}_N{system.N}"
 
-train(system, train="all", noise=False)
-
+sep = True
+noise = False
+num_epoch = 5
+if sep:
+    print("Training alpha")
+    train(system, train="alpha", num_epoch=num_epoch, noise=noise)
+    system.add_path = f"measure_{system.h_symb}_N{system.N}"
+    print("Training q^-1")
+    train(system, train="q", num_epoch=num_epoch, noise=noise)
+else:
+    train(system, train="all", num_epoch=num_epoch, noise=noise)
 
 # net = Net(n=system.n, N=system.N)
 # net.load_state_dict(torch.load(os.path.join("models", system.name, 'model_state_dict.pth')))

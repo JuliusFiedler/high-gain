@@ -280,12 +280,12 @@ class DoublePendulum(System):
         #            [0,1,0,0],
         #            [0,-2,0,0],
         #            [0,3,0,0]]
-        x0_list = [[-0.1,0,0,0],
+        x0_list = [[-1,0,0,0],
                    [0.05,0,0,0.1],
-                   [0.13,0,0.01,0],
+                   [1,1,0,0],
+                   [1,-1,0,0],
                    [0.08, 0.1, 0.1, 0.01],
                    ]
-        x_data = None
         tend = 30
         tt = np.linspace(0, tend, 6000)
         return self.simulate(x0_list, tt)
@@ -363,11 +363,14 @@ class MagneticPendulum(System):
             self.magnet_positions = np.array([[0,0]])
         else:
             self.magnet_positions = np.array([[np.cos(phi), np.sin(phi)] for phi in [i*2*np.pi/n_charges for i in np.arange(n_charges)]])
-        self.h = 0.5
-        self.b = 0.1
+        self.h = 0.3
+        self.w0 = 0.5
+        self.b = 0
+        self.angle = 30
 
         self.x1, self.x2, self.x3, self.x4 = self.x = sp.symbols("x1, x2, x3, x4")
-        self.h_symb = self.x1
+        self.h_symb = sp.cos(self.angle) * self.x1 + sp.sin(self.angle) * self.x2
+        # self.h_symb = self.x3
         self.n = 4
         self.N = 5
         self.z = [sp.var(f"z_{i}") for i in range(self.N)]
@@ -375,7 +378,9 @@ class MagneticPendulum(System):
         super().__init__()
 
     def get_output(self, x):
-        return x[0]
+        # return np.cos(self.angle/180*np.pi)*x[0] + np.sin(self.angle/180*np.pi)*x[1]
+        # return x[0]
+        return x[2:]
 
     def get_approx_region(self):
         return [[-np.pi, np.pi], [-np.pi, np.pi], [-30, 30], [-100,100]]
@@ -391,16 +396,72 @@ class MagneticPendulum(System):
 
         dx1 = x[2]
         dx2 = x[3]
-        dx3 = s[0] - self.b*x[2] - x[0]
-        dx4 = s[1] - self.b*x[3] - x[1]
+        dx3 = s[0] - self.b*x[2] - self.w0**2*x[0]
+        dx4 = s[1] - self.b*x[3] - self.w0**2*x[1]
 
         return np.array([dx1, dx2, dx3, dx4])
 
     def get_x_data(self):
         np.random.seed(2)
-        n = 30
+        n = 50
         x = (np.random.random(size=(2,n))-0.5)*4
         w = np.zeros((2,n))
+        x0_list = np.array([*x, *w]).T
+        # x0_list = np.concatenate((x0_list, np.array([[1,0,0.1],[1,0,-0.2]])), axis=0)
+        tend = 30
+        tt = np.linspace(0, tend, 6000)
+        return self.simulate(x0_list, tt)
+
+class ThreeBody(System):
+    """
+    Source:
+    https://en.wikipedia.org/wiki/Three-body_problem
+    """
+    def __init__(self):
+        # self.h_symb = self.x1
+        self.n = 18
+        self.N = 18
+        self.z = [sp.var(f"z_{i}") for i in range(self.N)]
+        self.name = "ThreeBody"
+
+        self.G = 6.674e-3
+        self.m1 = 1
+        self.m2 = 1
+        self.m3 = 1
+        super().__init__()
+
+    def get_output(self, x):
+        return x[0:3]
+
+    def rhs(self, t, x):
+        G = self.G
+        m1 = self.m1
+        m2 = self.m2
+        m3 = self.m3
+
+        rr1 = x[0:3]
+        rr2 = x[3:6]
+        rr3 = x[6:9]
+
+        drr1 = x[9:12]
+        drr2 = x[12:15]
+        drr3 = x[15:18]
+
+        # denominators, as factors for adolc -> minus in exponent
+        den12 = ((rr1[0] - rr2[0])**2 + (rr1[1] - rr2[1])**2 + (rr1[2] - rr2[2])**2) ** (-3/2)
+        den13 = ((rr1[0] - rr3[0])**2 + (rr1[1] - rr3[1])**2 + (rr1[2] - rr3[2])**2) ** (-3/2)
+        den23 = ((rr2[0] - rr3[0])**2 + (rr2[1] - rr3[1])**2 + (rr2[2] - rr3[2])**2) ** (-3/2)
+
+        ddrr1 = [-G*m2 * (rr1[i]-rr2[i]) * den12 - G*m3 * (rr1[i]- rr3[i]) * den13 for i in range(3)]
+        ddrr2 = [-G*m2 * (rr2[i]-rr3[i]) * den23 - G*m3 * (rr2[i]- rr1[i]) * den12 for i in range(3)]
+        ddrr3 = [-G*m2 * (rr3[i]-rr1[i]) * den13 - G*m3 * (rr3[i]- rr2[i]) * den23 for i in range(3)]
+        return np.array([*drr1, *drr2, *drr3, *ddrr1, *ddrr2, *ddrr3])
+
+    def get_x_data(self):
+        np.random.seed(2)
+        n = 30
+        x = (np.random.random(size=(9,n))-0.5)/5
+        w = np.zeros((9,n))
         x0_list = np.array([*x, *w]).T
         # x0_list = np.concatenate((x0_list, np.array([[1,0,0.1],[1,0,-0.2]])), axis=0)
         tend = 30

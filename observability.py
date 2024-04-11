@@ -18,8 +18,8 @@ def test(system: System):
     print("Output", system.h_symb)
 
 
-    def output(state):
-        return state[1]
+    # def output(state):
+    #     return state[1]
 
     Tape_F = 0
     Tape_H = 1
@@ -98,8 +98,10 @@ def test(system: System):
         rank = np.linalg.matrix_rank(lie)
         print(p0, ": Rank", rank)
     # IPS()
+
     IPS()
 
 test(MagneticPendulum())
+# test(DoublePendulum())
 # test(DoublePendulum2())
 # test(InvPendulum2())

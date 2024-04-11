@@ -6,17 +6,18 @@ from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 import adolc
 import time
+from ipydex import activate_ips_on_exception, IPS
 
 from systems import *
-from net import Net
+from net import Net, NetQ
 import util as u
-from ipydex import activate_ips_on_exception, IPS
+from expint import ExpRB43
 activate_ips_on_exception()
 
 add_path = None
 noise = False
 ######################################################
-s = 6
+s = 9
 if s == 1:
     system = UndampedHarmonicOscillator()
     # L = np.array([40, 600, 4000, 10000])
@@ -46,10 +47,12 @@ if s == 5:
     # add_path = f"N{system.N}"
 if s == 6:
     system = DoublePendulum()
-    L = u.get_coefs(np.ones(system.N) * -200)
-    x0 = np.array([-0.11, 0, 0, 0])
+    L = u.get_coefs(np.ones(system.N) * -50)
+    x0 = np.array([0.5, 0, 0, 0])
     z_hat0 = np.zeros(system.N)
-    add_path = f"measure_x1_N4"
+    add_path = f"measure_x1_N4_sep"
+    system.separate = True
+
 if s == 7:
     system = InvPendulum2()
     L = u.get_coefs(np.ones(system.N) * -200)
@@ -71,14 +74,18 @@ if s == 8:
 
 if s == 9:
     system = MagneticPendulum()
-    L = u.get_coefs(np.ones(system.N) * -50)
-    x0 = np.array([1.5, 1.5, 0, 0])
+    L = u.get_coefs(np.ones(system.N) * -100)
+    x0 = np.array([0.9, 0.1, 0, 0])
     z_hat0 = np.zeros(system.N)
-    add_path = f"measure_x1_N5"
-    # system.separate = True
+    # add_path = f"measure_x1_N5"
+    # add_path = f"measure_x1*cos(0.0833333333333333*pi) + x2*sin(0.0833333333333333*pi)_N4"
+    add_path = f"p-1_measure_x1*cos(30) + x2*sin(30)_N7_sep"
+    # add_path = "measure_x3_N4_sep"
+    system.separate = True
+
 
 # IPS()
-t_span = (0, 10)
+t_span = (0, 80)
 t_eval = np.linspace(t_span[0], t_span[1], 10000)
 ######################################################
 
@@ -90,7 +97,8 @@ model_path = os.path.join(folder_path, "model_state_dict.pth")
 if system.separate:
     model_alpha = Net(n=0, N=system.N)
     model_alpha.load_state_dict(torch.load(os.path.join(folder_path, "al_model_state_dict.pth")))
-    model_q = Net(n=system.n-1, N=system.N)
+    # model_q = Net(n=system.n-1, N=system.N)
+    model_q = NetQ(n=system.n, N=system.N)
     model_q.load_state_dict(torch.load(os.path.join(folder_path, "q_model_state_dict.pth")))
     scaler_in_al = joblib.load(os.path.join(folder_path, 'al_scaler_in.pkl'))
     scaler_lab_al = joblib.load(os.path.join(folder_path, 'al_scaler_lab.pkl'))
@@ -131,7 +139,7 @@ def system_with_observer_rhs(t, state):
         x_hat_normalized = model_alpha(z_tensor).numpy()[0]
     # t3 = time.time()
     alpha_hat = scaler_lab_al.inverse_transform([x_hat_normalized])[0][-1]
-    t4 = time.time()
+    # t4 = time.time()
     if system.log:
         alpha_hat = log_scaler.scale_up(alpha_hat)
 
@@ -229,31 +237,31 @@ plt.tight_layout()
 plt.savefig(os.path.join(folder_path, "x.pdf"), format="pdf")
 
 # plot x big
-fig, ax = plt.subplots(int((system.n+1)/2), 2, sharex=True, figsize=(8,4))
-for i in range(system.n):
-    binary = np.binary_repr(i, width=2)
-    idx = (int(binary[0]), int(binary[1]))
-    ax[idx].plot(t, x_solution[i, :], label=f"$x_{i+1}$ system", color="tab:blue")
-    ax[idx].plot(t, x_hat[:, i], label=f"$\hat x_{i+1}$ observer", linestyle='dashed', color="tab:orange")
-    ax[idx].set_ylabel(f'$x_{i+1}$')
-    ax[idx].set_ylim((min(x_solution[i, :])-0.5), max(x_solution[i, :])+0.5)
-    ax[idx].legend(loc="upper right")
-    ax[idx].grid()
-    ax[idx].scatter(0, x_solution[i, 0], color="tab:blue")
-    ax[idx].scatter(0, x_hat[0, i], color="tab:orange")
-ax[-1, 0].set_xlabel('Time (s)')
-if system.n %2 == 1:
-    for i in range(system.n):
-        ax[-1, 1].plot(t, np.abs(x_solution[i, :]-x_hat[:, i]), label=f"$\Delta x_{i+1}$", alpha=0.8)
-        ax[-1, 1].set_ylabel(f'Error')
-        ax[-1, 1].legend(loc="upper left")
-        ax[-1, 1].set_yscale("log")
-        ax[-1, 1].grid()
-ax[-1, 1].set_xlabel('Time (s)')
-# ax[1,1].set_visible(False)
-plt.tight_layout()
-# fig.suptitle(f"observer in original coordinates\nMeasuring {system.h_symb}")
-plt.savefig(os.path.join(folder_path, "x_big.pdf"), format="pdf")
+# fig, ax = plt.subplots(int((system.n+1)/2), 2, sharex=True, figsize=(8,4))
+# for i in range(system.n):
+#     binary = np.binary_repr(i, width=2)
+#     idx = (int(binary[0]), int(binary[1]))
+#     ax[idx].plot(t, x_solution[i, :], label=f"$x_{i+1}$ system", color="tab:blue")
+#     ax[idx].plot(t, x_hat[:, i], label=f"$\hat x_{i+1}$ observer", linestyle='dashed', color="tab:orange")
+#     ax[idx].set_ylabel(f'$x_{i+1}$')
+#     ax[idx].set_ylim((min(x_solution[i, :])-0.5), max(x_solution[i, :])+0.5)
+#     ax[idx].legend(loc="upper right")
+#     ax[idx].grid()
+#     ax[idx].scatter(0, x_solution[i, 0], color="tab:blue")
+#     ax[idx].scatter(0, x_hat[0, i], color="tab:orange")
+# ax[-1, 0].set_xlabel('Time (s)')
+# if system.n %2 == 1:
+#     for i in range(system.n):
+#         ax[-1, 1].plot(t, np.abs(x_solution[i, :]-x_hat[:, i]), label=f"$\Delta x_{i+1}$", alpha=0.8)
+#         ax[-1, 1].set_ylabel(f'Error')
+#         ax[-1, 1].legend(loc="upper left")
+#         ax[-1, 1].set_yscale("log")
+#         ax[-1, 1].grid()
+# ax[-1, 1].set_xlabel('Time (s)')
+# # ax[1,1].set_visible(False)
+# plt.tight_layout()
+# # fig.suptitle(f"observer in original coordinates\nMeasuring {system.h_symb}")
+# plt.savefig(os.path.join(folder_path, "x_big.pdf"), format="pdf")
 
 # plot z
 fig, ax = plt.subplots(system.N, 2, sharex=True, figsize=(12,2*system.N))
@@ -277,32 +285,32 @@ plt.tight_layout()
 plt.savefig(os.path.join(folder_path, "z.pdf"), format="pdf")
 
 # plot z bigger
-fig, ax = plt.subplots(int((system.N+1)/2), 2, sharex=True, figsize=(8,4))
-plt.rcParams.update({"font.size":10})
-for i in range(system.N):
-    binary = np.binary_repr(i, width=2)
-    idx = (int(binary[0]), int(binary[1]))
-    ax[idx].plot(t, z_nom[i, :], label=f"$z_{i+1}$ nominal", color="tab:blue")
-    ax[idx].plot(t, z_hat_solution[i, :], label=f"$\hat z_{i+1}$ observer", linestyle='dashed', color="tab:orange")
-    ax[idx].set_ylabel(f'$z_{i+1}$')
-    ax[idx].set_ylim((min(z_nom[i, :])-0.5), max(z_nom[i, :])+0.5)
-    ax[idx].legend(loc="upper right")
-    ax[idx].grid()
-    ax[idx].scatter(0, z_nom[i, 0], color="tab:blue")
-    ax[idx].scatter(0, z_hat_solution[i, 0], color="tab:orange")
-ax[-1, 0].set_xlabel('Time (s)')
-if system.N %2 == 1:
-    for i in range(system.n):
-        ax[-1, 1].plot(t, np.abs(z_nom[i, :]-z_hat_solution[i, :]), label=f"$\Delta z_{i+1}$", alpha=0.8)
-        ax[-1, 1].set_ylabel(f'Error')
-        ax[-1, 1].legend(loc="upper left")
-        ax[-1, 1].set_yscale("log")
-        ax[-1, 1].grid()
-        ax[-1, 1]
-ax[-1, 1].set_xlabel('Time (s)')
-plt.tight_layout()
-# plt.show()
-plt.savefig(os.path.join(folder_path, "z_big.pdf"), format="pdf")
+# fig, ax = plt.subplots(int((system.N+1)/2), 2, sharex=True, figsize=(8,4))
+# plt.rcParams.update({"font.size":10})
+# for i in range(system.N):
+#     binary = np.binary_repr(i, width=2)
+#     idx = (int(binary[0]), int(binary[1]))
+#     ax[idx].plot(t, z_nom[i, :], label=f"$z_{i+1}$ nominal", color="tab:blue")
+#     ax[idx].plot(t, z_hat_solution[i, :], label=f"$\hat z_{i+1}$ observer", linestyle='dashed', color="tab:orange")
+#     ax[idx].set_ylabel(f'$z_{i+1}$')
+#     ax[idx].set_ylim((min(z_nom[i, :])-0.5), max(z_nom[i, :])+0.5)
+#     ax[idx].legend(loc="upper right")
+#     ax[idx].grid()
+#     ax[idx].scatter(0, z_nom[i, 0], color="tab:blue")
+#     ax[idx].scatter(0, z_hat_solution[i, 0], color="tab:orange")
+# ax[-1, 0].set_xlabel('Time (s)')
+# if system.N %2 == 1:
+#     for i in range(system.n):
+#         ax[-1, 1].plot(t, np.abs(z_nom[i, :]-z_hat_solution[i, :]), label=f"$\Delta z_{i+1}$", alpha=0.8)
+#         ax[-1, 1].set_ylabel(f'Error')
+#         ax[-1, 1].legend(loc="upper left")
+#         ax[-1, 1].set_yscale("log")
+#         ax[-1, 1].grid()
+#         ax[-1, 1]
+# ax[-1, 1].set_xlabel('Time (s)')
+# plt.tight_layout()
+# # plt.show()
+# plt.savefig(os.path.join(folder_path, "z_big.pdf"), format="pdf")
 
 
 if system.n == 2:
@@ -387,4 +395,4 @@ plt.savefig(os.path.join(folder_path, "phase.pdf"), format="pdf")
 plt.show()
 
 
-IPS()
+# IPS()
