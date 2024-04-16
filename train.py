@@ -15,7 +15,26 @@ import util as u
 
 activate_ips_on_exception()
 
+
+def get_lie_derivs(system, output, points, d):
+
+    Tape_F, Tape_H = u.prepare_adolc(system, output)
+    lie_derivs = []
+
+    for i, x0 in enumerate(points):
+        lie = adolc.lie_scalarc(Tape_F, Tape_H, x0, d)
+        if system.alpha_limit:
+            if np.abs(lie[-1]) > system.alpha_limit:
+                lie[-1] = np.sign(lie[-1]) * system.alpha_limit
+        lie_derivs.append(lie)
+
+    lie_derivs = np.array(lie_derivs)
+
+    return lie_derivs
+
 def train(system: System, train: str, num_epoch=100, noise=False):
+    lenN = len(system.N) # TODO this will raise errors for old systems
+
     if system.name == "MagneticPendulum":
         system.add_path = f"p{system.charges[0]}_" + system.add_path
     assert train in ["all", "q", "alpha"]
@@ -44,51 +63,49 @@ def train(system: System, train: str, num_epoch=100, noise=False):
         meshgrid = np.meshgrid(*mesh_index) # shape [(NIP, NIP, ..), (NIP, NIP, ..)]
         points = np.vstack([x.ravel() for x in meshgrid]).T
 
+    # SISO
+    # TODO make this obsolete
+    if not hasattr(system.N, "__len__"):
+        assert hasattr(system.get_output(np.ones(system.n)), "__len__") == False, "Check system MIMO vs SISO. Conflict in N and output."
 
-    Tape_F = 0
-    Tape_H = 1
+        lie_derivs = get_lie_derivs(system, system.get_output, points, system.N)
 
-    n = system.n
-    adolc.trace_on(Tape_F)
-    af = [adolc.adouble() for _ in range(n)]
-    for i in range(n):
-        af[i].declareIndependent()
-    vf = system.rhs(0, af)
-    for a in vf:
-        a.declareDependent()
-    adolc.trace_off()
+        inputs = lie_derivs[:,:-1].T
+        if train == "all":
+            labels = np.empty((system.n+1, points.shape[0])) # shape (n+1, NIP**n)
+            labels[:-1, :] = points.T
+            labels[-1, :] = lie_derivs[:, -1]
 
-    adolc.trace_on(Tape_H)
-    ah = [adolc.adouble() for _ in range(n)]
-    for i in range(n):
-        ah[i].declareIndependent()
-    vh = system.get_output(ah)
-    vh.declareDependent()
-    adolc.trace_off()
+        elif train == "q":
+            labels = points.T
+        elif train == "alpha":
+            labels = np.empty((1, points.shape[0])) # shape (n+1, NIP**n)
+            labels[-1, :] = lie_derivs[:, -1]
+    # MIMO
+    else:
 
-    d = system.N
-    lie_derivs = []
+        lie_N_minus_1 = np.empty((points.shape[0], np.sum(system.N))) # shape (number of points, sum(N_i))
+        alphas = np.empty((points.shape[0], lenN))
+        idx = 0
+        for i, N in enumerate(system.N):
+            def outputwrapper(x):
+                return system.get_output(x)[i]
+            lie = get_lie_derivs(system, outputwrapper, points, N)
+            lie_N_minus_1[:, idx:idx+N] = lie[:,:-1] # fill array left to right blockwise
+            alphas[:, i] = lie[:,-1]
+            idx += N
+        alphas = np.array(alphas)
 
-    for i, x0 in enumerate(points):
-        lie = adolc.lie_scalarc(Tape_F, Tape_H, x0, d)
-        if system.alpha_limit:
-            if np.abs(lie[-1]) > system.alpha_limit:
-                lie[-1] = np.sign(lie[-1]) * system.alpha_limit
-        lie_derivs.append(lie)
+        inputs = lie_N_minus_1.T
+        if train == "all":
+            labels = np.empty((system.n+lenN, points.shape[0])) # shape (n+len(N), NIP**n)
+            labels[:-lenN, :] = points.T
+            labels[-lenN:, :] = alphas.T
 
-    lie_derivs = np.array(lie_derivs)
-
-    inputs = lie_derivs[:,:-1].T
-    if train == "all":
-        labels = np.empty((system.n+1, points.shape[0])) # shape (n+1, NIP**n)
-        labels[:-1, :] = points.T
-        labels[-1, :] = lie_derivs[:, -1]
-
-    elif train == "q":
-        labels = points.T
-    elif train == "alpha":
-        labels = np.empty((1, points.shape[0])) # shape (n+1, NIP**n)
-        labels[-1, :] = lie_derivs[:, -1]
+        elif train == "q":
+            labels = points.T
+        elif train == "alpha":
+            labels = alphas.T
 
     if noise:
         inputs = inputs + np.random.normal(0, 1e-3, size=inputs.shape)
@@ -115,11 +132,11 @@ def train(system: System, train: str, num_epoch=100, noise=False):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     if train == "all":
-        net = Net(n=system.n, N=system.N)
+        net = Net(dim_in=np.sum(system.N), dim_out=system.n+lenN)
     elif train == "q":
-        net = NetQ(n=system.n, N=system.N)
+        net = NetQ(dim_in=np.sum(system.N), dim_out=system.n)
     elif train == "alpha":
-        net = Net(n=0, N=system.N)
+        net = Net(dim_in=np.sum(system.N), dim_out=lenN)
 
 
     criterion = nn.MSELoss()
@@ -161,58 +178,50 @@ def train(system: System, train: str, num_epoch=100, noise=False):
     if train != "q":
         gamma = get_lipschitz_const(net)
         with open(os.path.join(folder_path, "notes.txt"), "at") as f:
-            f.write("gamma: " + str(round(gamma, 7)) + "\n")
+            f.write("gamma: " + str(np.round(gamma, 7)) + "\n")
     # IPS()
 
 def get_lipschitz_const(net):
+    for i in range(len(system.N)):
+        def outputwrapper(x):
+            return system.get_output(x)[i]
+        u.prepare_adolc(system, outputwrapper, Tape_F=2*i, Tape_H=2*i+1)
 
-    Tape_F = 0
-    Tape_H = 1
+    gammas = []
+    for k, N in enumerate(system.N):
 
-    n = system.n
-    adolc.trace_on(Tape_F)
-    af = [adolc.adouble() for _ in range(n)]
-    for i in range(n):
-        af[i].declareIndependent()
-    vf = system.rhs(0, af)
-    for a in vf:
-        a.declareDependent()
-    adolc.trace_off()
+        num_samples = 20000
+        gamma = 0
 
-    adolc.trace_on(Tape_H)
-    ah = [adolc.adouble() for _ in range(n)]
-    for i in range(n):
-        ah[i].declareIndependent()
-    vh = system.get_output(ah)
-    vh.declareDependent()
-    adolc.trace_off()
+        if hasattr(system, "get_x_data"):
+            x_data = system.get_x_data()
+            minmax = np.array([np.min(x_data, axis=1), np.max(x_data, axis=1)])
+        else:
+            minmax = np.array(system.get_approx_region()).T
 
-    num_samples = 20000
-    gamma = 0
+        for i in range(num_samples):
+            if i % 1000 == 0:
+                print(i)
+            xa = np.random.uniform(*minmax)
+            xb = np.random.uniform(*minmax)
+            za = []
+            zb = []
+            for j in range(len(system.N)):
+                # za = q(*xa).T
+                za.extend(adolc.lie_scalarc(2*j, 2*j+1, xa, N-1))
 
-    if hasattr(system, "get_x_data"):
-        x_data = system.get_x_data()
-        minmax = np.array([np.min(x_data, axis=1), np.max(x_data, axis=1)])
-    else:
-        minmax = np.array(system.get_approx_region()).T
+                # zb = q(*xb).T
+                zb.extend(adolc.lie_scalarc(2*j, 2*j+1, xb, N-1))
+            za = np.array(za)
+            zb = np.array(zb)
+            alphaa = net(torch.tensor(za, dtype=torch.float32)).detach().numpy()[-(len(system.N)-k)]
+            alphab = net(torch.tensor(zb, dtype=torch.float32)).detach().numpy()[-(len(system.N)-k)]
 
-    for i in range(num_samples):
-        if i % 1000 == 0:
-            print(i)
-        xa = np.random.uniform(*minmax)
-        xb = np.random.uniform(*minmax)
-        # za = q(*xa).T
-        za = adolc.lie_scalarc(Tape_F, Tape_H, xa, system.N-1)
-        alphaa = net(torch.tensor(za, dtype=torch.float32)).detach().numpy()[-1]
-
-        # zb = q(*xb).T
-        zb = adolc.lie_scalarc(Tape_F, Tape_H, xb, system.N-1)
-        alphab = net(torch.tensor(zb, dtype=torch.float32)).detach().numpy()[-1]
-
-        # gamma = delta alpha / delta z
-        gamma = max(gamma, np.abs((alphaa - alphab) / np.linalg.norm(za-zb)))
-    print("Lipschitz constant approx.:", gamma)
-    return gamma
+            # gamma = delta alpha / delta z
+            gamma = max(gamma, np.abs((alphaa - alphab) / np.linalg.norm(za-zb)))
+        print("Lipschitz constant approx.:", gamma)
+        gammas.append(gamma)
+    return gammas
 
 ################################################################################
 # system = UndampedHarmonicOscillator()
@@ -220,10 +229,10 @@ def get_lipschitz_const(net):
 # system = VanderPol()
 # system = Lorenz()
 # system = Roessler()
-# system = DoublePendulum()
+system = DoublePendulum()
 # system = DoublePendulum2()
 # system = InvPendulum2()
-system = MagneticPendulum()
+# system = MagneticPendulum()
 ################################################################################
 
 
@@ -231,7 +240,7 @@ system.add_path = f"measure_{system.h_symb}_N{system.N}"
 
 sep = True
 noise = False
-num_epoch = 5
+num_epoch = 100
 if sep:
     print("Training alpha")
     train(system, train="alpha", num_epoch=num_epoch, noise=noise)

@@ -4,7 +4,7 @@ import os
 from systems import *
 from net import Net
 from ipydex import IPS
-import adolc as ac
+import adolc
 
 
 IPS()

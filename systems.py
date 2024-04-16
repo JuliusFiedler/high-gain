@@ -249,10 +249,10 @@ class DoublePendulum(System):
     def __init__(self) -> None:
         self.x1, self.x2, self.x3, self.x4 = self.x = sp.symbols("x1, x2, x3, x4")
         # \dot{x} = f(x) + g(x)*u
-        self.h_symb = self.x1
+        self.h_symb = ["x1dot, x2dot"]
         self.n = 4
-        self.N = 4
-        self.z = [sp.var(f"z_{i}") for i in range(self.N)]
+        self.N = [4,4]
+        # self.z = [sp.var(f"z_{i}") for i in range(self.N)]
         self.name = "DoublePendulum"
         # if 1:
         #     self.get_rhs()
@@ -264,7 +264,7 @@ class DoublePendulum(System):
         # self.alpha_limit = 1000
 
     def get_output(self, x):
-        return x[0]
+        return x[2:]
 
     def get_approx_region(self):
         return [[-np.pi, np.pi], [-np.pi, np.pi], [-30, 30], [-100,100]]
@@ -274,19 +274,13 @@ class DoublePendulum(System):
         return np.array([x3, x4, -4.0*(-0.125*x3**2*sin(x2) - 2.4525*sin(x1 + x2))*(0.5*cos(x2) + 0.25)*(0.25*sin(x2)**2 + 0.0625)**-1 + (0.25*x3*x4*sin(x2) + 0.125*x4**2*sin(x2) - 7.3575*sin(x1) - 2.4525*sin(x1 + x2))*(0.25*sin(x2)**2 + 0.0625)**-1, 16.0*(-0.125*x3**2*sin(x2) - 2.4525*sin(x1 + x2))*(0.25*cos(x2) + 0.375)*(0.25*sin(x2)**2 + 0.0625)**-1 - 4.0*(0.5*cos(x2) + 0.25)*(0.25*x3*x4*sin(x2) + 0.125*x4**2*sin(x2) - 7.3575*sin(x1) - 2.4525*sin(x1 + x2))*(0.25*sin(x2)**2 + 0.0625)**-1])
 
     def get_x_data(self):
-        # x0_list = [[-1,0,0,0],
-        #            [2,0,0,0],
-        #            [-3,0,0,0],
-        #            [0,1,0,0],
-        #            [0,-2,0,0],
-        #            [0,3,0,0]]
-        x0_list = [[-1,0,0,0],
-                   [0.05,0,0,0.1],
-                   [1,1,0,0],
-                   [1,-1,0,0],
-                   [0.08, 0.1, 0.1, 0.01],
-                   ]
-        tend = 30
+        np.random.seed(2)
+        n = 70
+        x = (np.random.random(size=(2,n))-0.5)*2
+        w = np.zeros((2,n))
+        x0_list = np.array([*x, *w]).T
+        # x0_list = np.concatenate((x0_list, np.array([[1,0,0.1],[1,0,-0.2]])), axis=0)
+        tend = 50
         tt = np.linspace(0, tend, 6000)
         return self.simulate(x0_list, tt)
 
@@ -367,13 +361,15 @@ class MagneticPendulum(System):
         self.w0 = 0.5
         self.b = 0
         self.angle = 30
+        self.measurement_point = [-2, 0.5]
 
         self.x1, self.x2, self.x3, self.x4 = self.x = sp.symbols("x1, x2, x3, x4")
-        self.h_symb = sp.cos(self.angle) * self.x1 + sp.sin(self.angle) * self.x2
+        self.h_symb = ["x1dot", "x2dot"]
         # self.h_symb = self.x3
         self.n = 4
-        self.N = 5
-        self.z = [sp.var(f"z_{i}") for i in range(self.N)]
+        self.N = [5, 5]
+        # self.N = [5]
+        # self.z = [sp.var(f"z_{i}") for i in range(self.N)]
         self.name = "MagneticPendulum"
         super().__init__()
 
@@ -381,6 +377,7 @@ class MagneticPendulum(System):
         # return np.cos(self.angle/180*np.pi)*x[0] + np.sin(self.angle/180*np.pi)*x[1]
         # return x[0]
         return x[2:]
+        # return [np.sqrt((x[0]-self.measurement_point[0])**2 + (x[1]-self.measurement_point[1])**2)]
 
     def get_approx_region(self):
         return [[-np.pi, np.pi], [-np.pi, np.pi], [-30, 30], [-100,100]]
@@ -403,12 +400,12 @@ class MagneticPendulum(System):
 
     def get_x_data(self):
         np.random.seed(2)
-        n = 50
+        n = 70
         x = (np.random.random(size=(2,n))-0.5)*4
         w = np.zeros((2,n))
         x0_list = np.array([*x, *w]).T
         # x0_list = np.concatenate((x0_list, np.array([[1,0,0.1],[1,0,-0.2]])), axis=0)
-        tend = 30
+        tend = 50
         tt = np.linspace(0, tend, 6000)
         return self.simulate(x0_list, tt)
 

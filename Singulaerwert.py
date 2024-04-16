@@ -43,9 +43,9 @@ def test_poles(system, poles):
 
 
 system = MagneticPendulum()
-# system = DoublePendulum2()
+# system = DoublePendulum()
 
-poles = np.ones(system.N) * -50
+poles = np.ones(system.N) * -15
 l = input("enter lipschitz konstant")
 test_poles(system, poles)
 print(1/float(l))

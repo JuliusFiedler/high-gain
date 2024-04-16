@@ -1,0 +1,4 @@
+alpha last loss: 1.89e-05
+gamma: [1.7816814 1.2841353]
+q last loss: 0.0011516
+q last loss: 0.0002045

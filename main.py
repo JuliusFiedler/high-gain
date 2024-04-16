@@ -7,11 +7,11 @@ import matplotlib.pyplot as plt
 import adolc
 import time
 from ipydex import activate_ips_on_exception, IPS
+from matplotlib.animation import FuncAnimation
 
 from systems import *
 from net import Net, NetQ
 import util as u
-from expint import ExpRB43
 activate_ips_on_exception()
 
 add_path = None
@@ -74,20 +74,23 @@ if s == 8:
 
 if s == 9:
     system = MagneticPendulum()
-    L = u.get_coefs(np.ones(system.N) * -100)
-    x0 = np.array([0.9, 0.1, 0, 0])
-    z_hat0 = np.zeros(system.N)
+    poles = [-100, -100]
+    L = [u.get_coefs(np.ones(N) * pole) for N, pole in zip(system.N, poles)]
+    x0 = np.array([-0.25602039, -0.12885006, 0, 0])
+    # x0 = np.array([1.5, 1.5, 0, 0])
+    z_hat0 = np.zeros(np.sum(system.N))
     # add_path = f"measure_x1_N5"
     # add_path = f"measure_x1*cos(0.0833333333333333*pi) + x2*sin(0.0833333333333333*pi)_N4"
-    add_path = f"p-1_measure_x1*cos(30) + x2*sin(30)_N7_sep"
+    add_path = f"p-1.0_measure_['x1dot', 'x2dot']_N[5, 5]_sep"
     # add_path = "measure_x3_N4_sep"
     system.separate = True
 
 
 # IPS()
-t_span = (0, 80)
-t_eval = np.linspace(t_span[0], t_span[1], 10000)
+t_span = (0, 50)
+t_eval = np.linspace(t_span[0], t_span[1], 5000)
 ######################################################
+lenN = len(system.N)
 
 folder_path = os.path.join("models", system.name)
 if add_path:
@@ -95,31 +98,35 @@ if add_path:
 model_path = os.path.join(folder_path, "model_state_dict.pth")
 
 if system.separate:
-    model_alpha = Net(n=0, N=system.N)
+    model_alpha = Net(dim_in=np.sum(system.N), dim_out=lenN)
     model_alpha.load_state_dict(torch.load(os.path.join(folder_path, "al_model_state_dict.pth")))
     # model_q = Net(n=system.n-1, N=system.N)
-    model_q = NetQ(n=system.n, N=system.N)
+    model_q = NetQ(dim_in=np.sum(system.N), dim_out=system.n)
     model_q.load_state_dict(torch.load(os.path.join(folder_path, "q_model_state_dict.pth")))
     scaler_in_al = joblib.load(os.path.join(folder_path, 'al_scaler_in.pkl'))
     scaler_lab_al = joblib.load(os.path.join(folder_path, 'al_scaler_lab.pkl'))
     scaler_in_q = joblib.load(os.path.join(folder_path, 'q_scaler_in.pkl'))
     scaler_lab_q = joblib.load(os.path.join(folder_path, 'q_scaler_lab.pkl'))
 else:
-    model_alpha = Net(n=system.n, N=system.N)
+    model_alpha = Net(dim_in=np.sum(system.N), dim_out=lenN+system.n)
     model_alpha.load_state_dict(torch.load(model_path))
     model_q = model_alpha
     scaler_in_al = scaler_in_q = joblib.load(os.path.join(folder_path, 'scaler_in.pkl'))
     scaler_lab_al = scaler_lab_q = joblib.load(os.path.join(folder_path, 'scaler_lab.pkl'))
 # IPS()
 # Observability Canonical Form
-A = np.eye(system.N, k=1)
-b = np.zeros(system.N)
-b[-1] = 1
+A_list = []
+b_list = []
+for N in system.N:
+    A_list.append(np.eye(N, k=1))
+    b = np.zeros(N)
+    b[-1] = 1
+    b_list.append(b)
 # IPS()
 log_scaler = u.LogScaler()
 
 def system_with_observer_rhs(t, state):
-    assert len(state) == system.n + system.N, "Dimension Error"
+    assert len(state) == system.n + np.sum(system.N), "Dimension Error"
     x = state[:system.n]
     z_hat = state[system.n:]
     # t1 = time.time()
@@ -138,7 +145,7 @@ def system_with_observer_rhs(t, state):
     with torch.no_grad():
         x_hat_normalized = model_alpha(z_tensor).numpy()[0]
     # t3 = time.time()
-    alpha_hat = scaler_lab_al.inverse_transform([x_hat_normalized])[0][-1]
+    alpha_hat = scaler_lab_al.inverse_transform([x_hat_normalized])[0][-lenN:]
     # t4 = time.time()
     if system.log:
         alpha_hat = log_scaler.scale_up(alpha_hat)
@@ -156,10 +163,14 @@ def system_with_observer_rhs(t, state):
     if noise:
         y += np.random.normal(loc=0, scale=1e-7)
 
-    # observer
-    dz_hatdt = A @ z_hat + b * alpha_hat - L * (z_hat[0] - y)
-
-    return np.concatenate((dxdt, dz_hatdt))
+    derivatives = dxdt
+    idx = 0
+    # observer, einzelne Integratorketten
+    for i in range(lenN):
+        dz_hatdt = A_list[i] @ z_hat[idx:idx+system.N[i]] + b_list[i] * alpha_hat[i] - L[i] * (z_hat[idx] - y[i])
+        idx += system.N[i]
+        derivatives = np.concatenate((derivatives, dz_hatdt))
+    return derivatives
 
 # simulation
 
@@ -174,46 +185,31 @@ z_hat_solution = sol.y[system.n:, :]
 
 # calc nominal z values
 # z_nom = system.get_q_func()(*x_solution)
-Tape_F = 0
-Tape_H = 1
+for i in range(lenN):
+    def outputwrapper(x):
+        return system.get_output(x)[i]
+    u.prepare_adolc(system, outputwrapper, Tape_F=2*i, Tape_H=2*i+1)
 
-n = system.n
-adolc.trace_on(Tape_F)
-af = [adolc.adouble() for _ in range(n)]
-for i in range(n):
-    af[i].declareIndependent()
-vf = system.rhs(0, af)
-for a in vf:
-    a.declareDependent()
-adolc.trace_off()
-
-adolc.trace_on(Tape_H)
-ah = [adolc.adouble() for _ in range(n)]
-for i in range(n):
-    ah[i].declareIndependent()
-vh = system.get_output(ah)
-vh.declareDependent()
-adolc.trace_off()
-
-d = system.N-1
 lie_derivs = []
 
-for i, p0 in enumerate(x_solution.T):
-    lie = adolc.lie_scalarc(Tape_F, Tape_H, p0, d)
-    lie_derivs.append(lie)
+for k, p0 in enumerate(x_solution.T):
+    z = []
+    for j in range(lenN):
+        z.extend(adolc.lie_scalarc(2*j, 2*j+1, p0, system.N[j]-1))
+    lie_derivs.append(z)
 
 z_nom = np.array(lie_derivs).T
 
 # reconstruct x from observer state
 print("reconstruct x")
 # IPS()
-z_hat_solution_normalized = scaler_in_q.transform(z_hat_solution[:7].T)
+z_hat_solution_normalized = scaler_in_q.transform(z_hat_solution.T)
 with torch.no_grad():
     x_hat_normalized = model_q(torch.from_numpy(z_hat_solution_normalized).float()).numpy()
 x_hat = scaler_lab_q.inverse_transform(x_hat_normalized)
 
-
-folder_path = os.path.join(folder_path, f"aw_{x0}")
+print("plotting")
+folder_path = os.path.join(folder_path, f"aw_{x0}__poles_{poles}")
 os.makedirs(folder_path, exist_ok=True)
 # plot x
 fig, ax = plt.subplots(system.n, 2, sharex=True, figsize=(12,2*system.n))
@@ -264,8 +260,8 @@ plt.savefig(os.path.join(folder_path, "x.pdf"), format="pdf")
 # plt.savefig(os.path.join(folder_path, "x_big.pdf"), format="pdf")
 
 # plot z
-fig, ax = plt.subplots(system.N, 2, sharex=True, figsize=(12,2*system.N))
-for i in range(system.N):
+fig, ax = plt.subplots(sum(system.N), 2, sharex=True, figsize=(12,2*sum(system.N)))
+for i in range(sum(system.N)):
     ax[i, 0].plot(t, z_nom[i, :], label=f"$z_{i+1}$ nominal", color="tab:blue")
     ax[i, 0].plot(t, z_hat_solution[i, :], label=f"$\hat z_{i+1}$ observer", linestyle='dashed', color="tab:orange")
     ax[i, 0].set_ylabel(f'$z_{i+1}$')
@@ -273,7 +269,7 @@ for i in range(system.N):
     ax[i, 0].legend()
     ax[i, 0].grid()
 ax[-1, 0].set_xlabel('Time (s)')
-for i in range(system.N):
+for i in range(sum(system.N)):
     ax[i, 1].plot(t, np.abs(z_nom[i, :]-z_hat_solution[i, :]), label=f"$z_{i+1}$ Error")
     ax[i, 1].set_ylabel(f'$z_{i+1}$ Error')
     ax[i, 1].legend()
@@ -384,15 +380,57 @@ elif system.name == "MagneticPendulum":
     ax.scatter(x_hat[0,0], x_hat[1,0], color="tab:orange")
 
     # magnets
-    ax.scatter(*system.magnet_positions.T, color="red", label="repelling magnets")
+    ax.scatter(*system.magnet_positions.T, color="red", label="magnets")
     plt.ylim(-3, 3)
     plt.xlim(-3, 3)
     ax.set_aspect('equal', 'box')
     ax.set_xlabel("x")
     ax.set_ylabel("y")
+plt.legend()
 plt.tight_layout()
 plt.savefig(os.path.join(folder_path, "phase.pdf"), format="pdf")
 plt.show()
 
+# animation
+confirm = input("animate? [y]/n\n")
+if confirm == "" or confirm == "y":
+    print("animation")
+    import functools as ft
+    if system.name == "MagneticPendulum":
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        solutions = [x_solution, x_hat.T]
+        x1 = []
+        y1 = []
+        x2 = []
+        y2 = []
+        plt.xlim(-3,3)
+        plt.ylim(-3,3)
+        line_sys, = ax.plot([], [], lw = 3, color="tab:blue", label="system")
+        line_obs, = ax.plot([], [], lw = 2, color="tab:orange", label="observer", alpha=0.5)
+        plt.legend()
+        def init(solutions):
+            ax.scatter(solutions[0][0][0], solutions[0][1][0])
+            ax.scatter(solutions[1][0][0], solutions[1][1][0])
+            ax.grid()
+            line_sys.set_data([],[])
+            ax.scatter(*system.magnet_positions.T, color= "red")
+            return [line_sys, line_obs]
 
+        def animate(frame, solutions):
+            assert frame < solutions[0].shape[1]
+            line_sys.set_data(solutions[0][0, :frame], solutions[0][1, :frame])
+            line_obs.set_data(solutions[1][0, :frame], solutions[1][1, :frame])
+            return [line_sys, line_obs]
+
+        anim = FuncAnimation(
+            fig,
+            ft.partial(animate, solutions=solutions),
+            init_func = ft.partial(init, solutions=solutions),
+            frames = x_solution.shape[1],
+            interval = 1,
+            blit = True
+            )
+        anim.save(os.path.join(folder_path, "anim.mp4"), writer = 'ffmpeg', fps = 30)
+    plt.show()
 # IPS()

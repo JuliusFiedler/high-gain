@@ -19,8 +19,8 @@ def test(system: System):
     #     x1, x2, x3, x4 = state
     #     return np.array([x3, x4, np.sin(x1), x2*x1**(-1)])
 
-    def output(state):
-        return state[0]
+    # def output(state):
+    #     return state[0]
 
     Tape_F = 0
     Tape_H = 1
@@ -46,9 +46,9 @@ def test(system: System):
 
 
     d = 5
-    x0 = np.ones(n)
-    lie = adolc.lie_scalarc(Tape_F, Tape_H, x0, d)
+    x0 = np.array([.1,0,0, 0,.2,0, 0,0,.15, 0,0,0, 0,0,0, 0,0,0])
     IPS()
+    lie = adolc.lie_scalarc(Tape_F, Tape_H, x0, d)
 
 
-test(DoublePendulum())
+test(ThreeBody())
