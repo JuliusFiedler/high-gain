@@ -55,7 +55,7 @@ class System:
     def simulate(self, x0_list, tt):
         x_data = None
         for x0 in x0_list:
-            s = solve_ivp(self.rhs, (0, tt[-1]), x0, t_eval=tt)
+            s = solve_ivp(self.rhs, (0, tt[-1]), x0, t_eval=tt, atol=1e-7, rtol=1e-7)
             if x_data is None:
                 x_data = s.y
             else:
@@ -290,32 +290,32 @@ class DoublePendulum2(System):
         self.x1, self.x2, self.x3, self.x4, self.x5, self.x6 = self.x = sp.symbols("x1, x2, x3, x4, x5, x6")
         self.pp = sp.var("p1, p2, p3, p4, p5, p6")
         # \dot{x} = f(x) + g(x)*u
-        self.h_symb = self.x6
+        self.h_symb = ["phi1fot, phi2dot"]
         self.n = 6
-        self.N = 9
-        self.z = [sp.var(f"z_{i}") for i in range(self.N)]
+        self.N = [4,4]
+        # self.z = [sp.var(f"z_{i}") for i in range(self.N)]
         self.name = "DoublePendulum2"
         # if 1:
         #     self.get_rhs()
         # else:
-        with open(f"models/{self.name}/pdot.pcl", "rb") as f:
-            pdot = pickle.load(f)
+        # with open(f"models/{self.name}/pdot.pcl", "rb") as f:
+        #     pdot = pickle.load(f)
         # self.pdot_func = sp.lambdify(self.pp, pdot)
         with open(f"models/{self.name}/p.pcl", "rb") as f:
             self.p_symb = pickle.load(f)
         self.p_x = sp.lambdify(self.x[:4], self.p_symb)#
 
-        self.f_symb = pdot.subs(zip(self.pp, self.x))
+        # self.f_symb = pdot.subs(zip(self.pp, self.x))
         super().__init__()
         # self.alpha_limit = 10
         # self.log = True
         self.separate = True
 
     def get_output(self, x):
-        return x[5]
+        return x[4:]
 
-    def get_approx_region(self):
-        return [[-np.pi, np.pi], [-np.pi, np.pi], [-30, 30], [-100,100]]
+    # def get_approx_region(self):
+    #     return [[-np.pi, np.pi], [-np.pi, np.pi], [-30, 30], [-100,100]]
 
     def rhs(self, t, x):
         p1, p2, p3, p4, p5, p6 = x
@@ -329,17 +329,17 @@ class DoublePendulum2(System):
 
     def get_x_data(self):
         np.random.seed(2)
+        n=30
         # phi0 = np.random.random(size=10)*np.pi*2
         # phi1 = np.random.random(size=10)*np.pi*2
         # w0 = (np.random.random(size=10) - 0.5)*2
         # w1 = (np.random.random(size=10) - 0.5)*2
-        phi0 = (np.random.random(size=10)-0.5)*2
-        phi1 = np.zeros(10)
-        w0 = np.zeros(10)
-        w1 = np.zeros(10)
+        phi0 = (np.random.random(size=n)-0.5)*4
+        phi1 = np.zeros(n)
+        w0 = np.zeros(n)
+        w1 = np.zeros(n)
         x0_list = self.p_x(phi0, phi1, w0, w1).T[:,0,:]
         # x0_list = np.concatenate((x0_list, np.array([[1,0,0.1],[1,0,-0.2]])), axis=0)
-        x_data = None
         tend = 30
         tt = np.linspace(0, tend, 6000)
         return self.simulate(x0_list, tt)
@@ -352,13 +352,13 @@ class MagneticPendulum(System):
     """
     def __init__(self):
         self.n_charges = n_charges = 3
-        self.charges = np.ones(n_charges, dtype=float) * -1
+        self.charges = np.ones(n_charges, dtype=float) #* -1
         if n_charges == 1:
             self.magnet_positions = np.array([[0,0]])
         else:
             self.magnet_positions = np.array([[np.cos(phi), np.sin(phi)] for phi in [i*2*np.pi/n_charges for i in np.arange(n_charges)]])
-        self.h = 0.3
-        self.w0 = 0.5
+        self.h = 0.33 #0.3
+        self.w0 = 0.55
         self.b = 0
         self.angle = 30
         self.measurement_point = [-2, 0.5]

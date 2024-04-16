@@ -17,7 +17,7 @@ activate_ips_on_exception()
 add_path = None
 noise = False
 ######################################################
-s = 9
+s = 8
 if s == 1:
     system = UndampedHarmonicOscillator()
     # L = np.array([40, 600, 4000, 10000])
@@ -65,30 +65,31 @@ if s == 7:
 
 if s == 8:
     system = DoublePendulum2()
-    L = u.get_coefs(np.ones(system.N) * -200)
-    x0 = system.p_x(1,0,0,0).T[0]
-    z_hat0 = np.zeros(system.N)
+    poles = [-100, -100]
+    L = [u.get_coefs(np.ones(N) * pole) for N, pole in zip(system.N, poles)]
+    x0 = system.p_x(2,0,0,0).T[0]
+    z_hat0 = np.zeros(np.sum(system.N))
     # add_path = f"scale_z_a"
-    add_path = f"separate_nets__alphalimit_None_N9"
+    add_path = f"measure_['phi1fot, phi2dot']_N[4, 4]_sep"
     # add_path = f"N7"
 
 if s == 9:
     system = MagneticPendulum()
-    poles = [-100, -100]
+    poles = [-50, -50]
     L = [u.get_coefs(np.ones(N) * pole) for N, pole in zip(system.N, poles)]
-    x0 = np.array([-0.25602039, -0.12885006, 0, 0])
-    # x0 = np.array([1.5, 1.5, 0, 0])
+    # x0 = np.array([0.9, 0.1, 0, 0])
+    x0 = np.array([1.51, 1.51, 0, 0])
     z_hat0 = np.zeros(np.sum(system.N))
     # add_path = f"measure_x1_N5"
     # add_path = f"measure_x1*cos(0.0833333333333333*pi) + x2*sin(0.0833333333333333*pi)_N4"
-    add_path = f"p-1.0_measure_['x1dot', 'x2dot']_N[5, 5]_sep"
+    add_path = f"p1.0_measure_['x1dot', 'x2dot']_N[5, 5]_sep"
     # add_path = "measure_x3_N4_sep"
     system.separate = True
 
 
 # IPS()
-t_span = (0, 50)
-t_eval = np.linspace(t_span[0], t_span[1], 5000)
+t_span = (0, 20)
+t_eval = np.linspace(t_span[0], t_span[1], 2000)
 ######################################################
 lenN = len(system.N)
 
@@ -177,7 +178,7 @@ def system_with_observer_rhs(t, state):
 
 w0 = np.concatenate((x0, z_hat0))
 print("start simulation")
-sol = solve_ivp(system_with_observer_rhs, t_span, w0, t_eval=t_eval)
+sol = solve_ivp(system_with_observer_rhs, t_span, w0, t_eval=t_eval, atol=1e-7, rtol=1e-7)
 
 t = sol.t
 x_solution = sol.y[:system.n, :]

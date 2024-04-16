@@ -9,17 +9,17 @@ import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
 
-system = InvPendulum2()
+system = DoublePendulum2()
 
 rhs = system.rhs
 
 
 t_span = (0, 50)
-t_eval = np.linspace(t_span[0], t_span[1], 50000)
+t_eval = np.linspace(t_span[0], t_span[1], 5000)
 
-x0 = [1,0,0]
+x0 = system.p_x(1,0,0,0).T[0]
 
-sol = solve_ivp(rhs, t_span, x0, t_eval=t_eval)
+sol = solve_ivp(rhs, t_span, x0, t_eval=t_eval, atol=1e-7, rtol=1e-7)
 
 
 fig, ax = plt.subplots(system.n, 1, sharex=True)

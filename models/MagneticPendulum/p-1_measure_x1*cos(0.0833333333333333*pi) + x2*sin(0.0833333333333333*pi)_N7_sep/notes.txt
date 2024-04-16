@@ -1,0 +1,3 @@
+alpha last loss: 2.41e-05
+q last loss: 0.0271552
+q last loss: 0.008424

@@ -1,0 +1,3 @@
+more interesting training data, but no full rotations of outer pendulum
+alpha last loss: 5.78e-05
+q last loss: 0.0088799

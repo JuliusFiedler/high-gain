@@ -222,15 +222,15 @@ def get_lipschitz_const(net):
         print("Lipschitz constant approx.:", gamma)
         gammas.append(gamma)
     return gammas
-
+print("init System")
 ################################################################################
 # system = UndampedHarmonicOscillator()
 # system = DuffingOscillator()
 # system = VanderPol()
 # system = Lorenz()
 # system = Roessler()
-system = DoublePendulum()
-# system = DoublePendulum2()
+# system = DoublePendulum()
+system = DoublePendulum2()
 # system = InvPendulum2()
 # system = MagneticPendulum()
 ################################################################################

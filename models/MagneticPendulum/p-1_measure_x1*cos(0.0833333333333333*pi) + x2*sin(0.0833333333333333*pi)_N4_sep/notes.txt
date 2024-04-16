@@ -1,0 +1,4 @@
+alpha last loss: 0.000538
+q last loss: 0.002273
+b=0:
+alpha last loss: 0.0009292
