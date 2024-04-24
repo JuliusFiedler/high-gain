@@ -17,7 +17,7 @@ activate_ips_on_exception()
 add_path = None
 noise = False
 ######################################################
-s = 8
+s = 9
 if s == 1:
     system = UndampedHarmonicOscillator()
     # L = np.array([40, 600, 4000, 10000])
@@ -75,21 +75,22 @@ if s == 8:
 
 if s == 9:
     system = MagneticPendulum()
-    poles = [-50, -50]
+    poles = [-100, -100]
     L = [u.get_coefs(np.ones(N) * pole) for N, pole in zip(system.N, poles)]
     # x0 = np.array([0.9, 0.1, 0, 0])
-    x0 = np.array([1.51, 1.51, 0, 0])
+    x0 = np.array([1.5, 1.5, 0, 0])
     z_hat0 = np.zeros(np.sum(system.N))
     # add_path = f"measure_x1_N5"
     # add_path = f"measure_x1*cos(0.0833333333333333*pi) + x2*sin(0.0833333333333333*pi)_N4"
-    add_path = f"p1.0_measure_['x1dot', 'x2dot']_N[5, 5]_sep"
+    # add_path = f"p1.0_measure_['x1dot', 'x2dot']_N[5, 5]_sep"
+    add_path = "p1.0_measure_['x1dot', 'x2dot']_N[5, 5]_rand_mag_pos_sep"
     # add_path = "measure_x3_N4_sep"
     system.separate = True
 
 
 # IPS()
 t_span = (0, 20)
-t_eval = np.linspace(t_span[0], t_span[1], 2000)
+t_eval = np.linspace(t_span[0], t_span[1], 100*t_span[1])
 ######################################################
 lenN = len(system.N)
 
@@ -178,7 +179,7 @@ def system_with_observer_rhs(t, state):
 
 w0 = np.concatenate((x0, z_hat0))
 print("start simulation")
-sol = solve_ivp(system_with_observer_rhs, t_span, w0, t_eval=t_eval, atol=1e-7, rtol=1e-7)
+sol = solve_ivp(system_with_observer_rhs, t_span, w0, t_eval=t_eval)#, atol=1e-7, rtol=1e-7)
 
 t = sol.t
 x_solution = sol.y[:system.n, :]
@@ -223,13 +224,13 @@ for i in range(system.n):
     ax[i, 0].grid()
 ax[-1, 0].set_xlabel('Time (s)')
 for i in range(system.n):
-    ax[i, 1].plot(t, np.abs(x_solution[i, :]-x_hat[:, i]), label=f"$x_{i+1}$ Error")
-    ax[i, 1].set_ylabel(f'$x_{i+1}$ Error')
+    ax[i, 1].plot(t, np.abs(x_solution[i, :]-x_hat[:, i]), label=f"$x_{i+1}$ error")
+    ax[i, 1].set_ylabel(f'$x_{i+1}$ error')
     ax[i, 1].legend()
     ax[i, 1].set_yscale("log")
     ax[i, 1].grid()
 ax[-1, 1].set_xlabel('Time (s)')
-fig.suptitle(f"observer in original coordinates\nMeasuring {system.h_symb}")
+# fig.suptitle(f"observer in original coordinates\nMeasuring {system.h_symb}")
 plt.tight_layout()
 plt.savefig(os.path.join(folder_path, "x.pdf"), format="pdf")
 
@@ -250,7 +251,7 @@ plt.savefig(os.path.join(folder_path, "x.pdf"), format="pdf")
 # if system.n %2 == 1:
 #     for i in range(system.n):
 #         ax[-1, 1].plot(t, np.abs(x_solution[i, :]-x_hat[:, i]), label=f"$\Delta x_{i+1}$", alpha=0.8)
-#         ax[-1, 1].set_ylabel(f'Error')
+#         ax[-1, 1].set_ylabel(f'error')
 #         ax[-1, 1].legend(loc="upper left")
 #         ax[-1, 1].set_yscale("log")
 #         ax[-1, 1].grid()
@@ -263,23 +264,49 @@ plt.savefig(os.path.join(folder_path, "x.pdf"), format="pdf")
 # plot z
 fig, ax = plt.subplots(sum(system.N), 2, sharex=True, figsize=(12,2*sum(system.N)))
 for i in range(sum(system.N)):
-    ax[i, 0].plot(t, z_nom[i, :], label=f"$z_{i+1}$ nominal", color="tab:blue")
-    ax[i, 0].plot(t, z_hat_solution[i, :], label=f"$\hat z_{i+1}$ observer", linestyle='dashed', color="tab:orange")
-    ax[i, 0].set_ylabel(f'$z_{i+1}$')
+    ax[i, 0].plot(t, z_nom[i, :], label="$z_{"+str(i+1)+"}$ nominal", color="tab:blue")
+    ax[i, 0].plot(t, z_hat_solution[i, :], label="$\hat z_{"+str(i+1)+"}$ observer", linestyle='dashed', color="tab:orange")
+    ax[i, 0].set_ylabel("$z_{"+str(i+1)+"}$")
     ax[i, 0].set_ylim((min(z_nom[i, :])-1), max(z_nom[i, :])+1)
     ax[i, 0].legend()
     ax[i, 0].grid()
 ax[-1, 0].set_xlabel('Time (s)')
 for i in range(sum(system.N)):
-    ax[i, 1].plot(t, np.abs(z_nom[i, :]-z_hat_solution[i, :]), label=f"$z_{i+1}$ Error")
-    ax[i, 1].set_ylabel(f'$z_{i+1}$ Error')
+    ax[i, 1].plot(t, np.abs(z_nom[i, :]-z_hat_solution[i, :]), label="$z_{"+str(i+1)+"}$ error")
+    ax[i, 1].set_ylabel("$z_{"+str(i+1)+"}$ error")
     ax[i, 1].legend()
     ax[i, 1].set_yscale("log")
     ax[i, 1].grid()
 ax[-1, 1].set_xlabel('Time (s)')
-fig.suptitle(f"embedded observer\nMeasuring {system.h_symb}")
+# fig.suptitle(f"embedded observer\nMeasuring {system.h_symb}")
 plt.tight_layout()
 plt.savefig(os.path.join(folder_path, "z.pdf"), format="pdf")
+
+# plot z double
+if system.N[0] == system.N[1]:#todo this is not sufficient
+    N = system.N[0]
+    fig, ax = plt.subplots(int(sum(system.N)/2), 2, sharex=True, figsize=(12,2*sum(system.N)/2))
+    for i in range(N):
+        ax[i, 0].plot(t, z_nom[i, :], label="$z_{"+str(i+1)+"}$ nominal", color="tab:blue")
+        ax[i, 0].plot(t, z_nom[i+N, :], label="$z_{"+str(i+N+1)+"}$ nominal", color="blue")
+        ax[i, 0].plot(t, z_hat_solution[i, :], label="$\hat z_{"+str(i+1)+"}$ observer", linestyle='dashed', color="tab:orange")
+        ax[i, 0].plot(t, z_hat_solution[i+N, :], label="$\hat z_{"+str(i+N+1)+"}$ observer", linestyle='dashed', color="gold")
+        ax[i, 0].set_ylabel("$z_{"+str(i+1)+"}$"+ " ,$z_{"+str(i+N+1)+"}$")
+        ax[i, 0].set_ylim((np.min([z_nom[i, :], z_nom[i+N, :]])-1), np.max([z_nom[i, :], z_nom[i+N, :]])+1)
+        ax[i, 0].legend()
+        ax[i, 0].grid()
+    ax[-1, 0].set_xlabel('Time (s)')
+    for i in range(N):
+        ax[i, 1].plot(t, np.abs(z_nom[i, :]-z_hat_solution[i, :]), label="$z_{"+str(i+1)+"}$ error")
+        ax[i, 1].plot(t, np.abs(z_nom[i+N, :]-z_hat_solution[i+N, :]), label="$z_{"+str(i+N+1)+"}$ error")
+        ax[i, 1].set_ylabel("$z_{"+str(i+1)+"}$, $z_{"+str(i+N+1)+ "}$ error")
+        ax[i, 1].legend()
+        ax[i, 1].set_yscale("log")
+        ax[i, 1].grid()
+    ax[-1, 1].set_xlabel('Time (s)')
+    # fig.suptitle(f"embedded observer\nMeasuring {system.h_symb}")
+    plt.tight_layout()
+    plt.savefig(os.path.join(folder_path, "z_double.pdf"), format="pdf")
 
 # plot z bigger
 # fig, ax = plt.subplots(int((system.N+1)/2), 2, sharex=True, figsize=(8,4))
@@ -299,7 +326,7 @@ plt.savefig(os.path.join(folder_path, "z.pdf"), format="pdf")
 # if system.N %2 == 1:
 #     for i in range(system.n):
 #         ax[-1, 1].plot(t, np.abs(z_nom[i, :]-z_hat_solution[i, :]), label=f"$\Delta z_{i+1}$", alpha=0.8)
-#         ax[-1, 1].set_ylabel(f'Error')
+#         ax[-1, 1].set_ylabel(f'error')
 #         ax[-1, 1].legend(loc="upper left")
 #         ax[-1, 1].set_yscale("log")
 #         ax[-1, 1].grid()
@@ -371,14 +398,13 @@ elif system.name == "DoublePendulum2":
     ax.set_ylabel("y")
 elif system.name == "MagneticPendulum":
     fig = plt.figure()
-    # inner arm G1
     ax = fig.add_subplot(111)
     # system
     ax.plot(x_solution[0], x_solution[1], color="tab:blue", label="system")
     ax.scatter(x_solution[0,0], x_solution[1,0], color="tab:blue")
     # observer
     ax.plot(x_hat[:,0], x_hat[:,1], color="tab:orange", label="observer", alpha=0.5)
-    ax.scatter(x_hat[0,0], x_hat[1,0], color="tab:orange")
+    ax.scatter(x_hat[0,0], x_hat[0,1], color="tab:orange")
 
     # magnets
     ax.scatter(*system.magnet_positions.T, color="red", label="magnets")

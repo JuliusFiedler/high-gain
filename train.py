@@ -230,21 +230,20 @@ print("init System")
 # system = Lorenz()
 # system = Roessler()
 # system = DoublePendulum()
-system = DoublePendulum2()
+# system = DoublePendulum2()
 # system = InvPendulum2()
-# system = MagneticPendulum()
+system = MagneticPendulum()
 ################################################################################
 
-
-system.add_path = f"measure_{system.h_symb}_N{system.N}"
-
+add_path = f"measure_{system.h_symb}_N{system.N}_rand_mag_pos"
+system.add_path = add_path
 sep = True
 noise = False
 num_epoch = 100
 if sep:
     print("Training alpha")
     train(system, train="alpha", num_epoch=num_epoch, noise=noise)
-    system.add_path = f"measure_{system.h_symb}_N{system.N}"
+    system.add_path = add_path
     print("Training q^-1")
     train(system, train="q", num_epoch=num_epoch, noise=noise)
 else:
