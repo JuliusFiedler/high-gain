@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
 
-system = DoublePendulum2()
+system = DoublePendulum()
 
 rhs = system.rhs
 
@@ -17,7 +17,8 @@ rhs = system.rhs
 t_span = (0, 50)
 t_eval = np.linspace(t_span[0], t_span[1], 5000)
 
-x0 = system.p_x(1,0,0,0).T[0]
+x0 = [1,1,0,0]
+
 
 sol = solve_ivp(rhs, t_span, x0, t_eval=t_eval, atol=1e-7, rtol=1e-7)
 
