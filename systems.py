@@ -357,8 +357,8 @@ class MagneticPendulum(System):
             self.magnet_positions = np.array([[0,0]])
         else:
             self.magnet_positions = np.array([[np.cos(phi), np.sin(phi)] for phi in [i*2*np.pi/n_charges for i in np.arange(n_charges)]])
-        self.h = 0.33 #0.3
-        self.w0 = 0.55
+        self.h = 0.3 #0.3
+        self.w0 = 0.5
         self.b = 0
         self.angle = 30
         self.measurement_point = [-2, 0.5]
