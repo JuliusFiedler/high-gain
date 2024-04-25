@@ -82,8 +82,8 @@ if s == 9:
     z_hat0 = np.zeros(np.sum(system.N))
     # add_path = f"measure_x1_N5"
     # add_path = f"measure_x1*cos(0.0833333333333333*pi) + x2*sin(0.0833333333333333*pi)_N4"
-    # add_path = f"p1.0_measure_['x1dot', 'x2dot']_N[5, 5]_sep"
-    add_path = "p1.0_measure_['x1dot', 'x2dot']_N[5, 5]_rand_mag_pos_sep"
+    add_path = f"p1.0_measure_['x1dot', 'x2dot']_N[5, 5]_sep"
+    # add_path = "p1.0_measure_['x1dot', 'x2dot']_N[5, 5]_rand_mag_pos_sep"
     # add_path = "measure_x3_N4_sep"
     system.separate = True
 
@@ -211,6 +211,12 @@ with torch.no_grad():
 x_hat = scaler_lab_q.inverse_transform(x_hat_normalized)
 
 print("plotting")
+# plt.rcParams.update({
+#     "text.usetex": True,
+# })
+# cm = 1/2.54
+
+# IPS()
 folder_path = os.path.join(folder_path, f"aw_{x0}__poles_{poles}")
 os.makedirs(folder_path, exist_ok=True)
 # plot x
@@ -222,17 +228,17 @@ for i in range(system.n):
     ax[i, 0].set_ylim((min(x_solution[i, :])-1), max(x_solution[i, :])+1)
     ax[i, 0].legend()
     ax[i, 0].grid()
-ax[-1, 0].set_xlabel('Time (s)')
+ax[-1, 0].set_xlabel('Zeit (s)')
 for i in range(system.n):
-    ax[i, 1].plot(t, np.abs(x_solution[i, :]-x_hat[:, i]), label=f"$x_{i+1}$ error")
-    ax[i, 1].set_ylabel(f'$x_{i+1}$ error')
+    ax[i, 1].plot(t, np.abs(x_solution[i, :]-x_hat[:, i]), label=f"Fehler $x_{i+1}$")
+    ax[i, 1].set_ylabel(f'Fehler $x_{i+1}$')
     ax[i, 1].legend()
     ax[i, 1].set_yscale("log")
     ax[i, 1].grid()
-ax[-1, 1].set_xlabel('Time (s)')
+ax[-1, 1].set_xlabel('Zeit (s)')
 # fig.suptitle(f"observer in original coordinates\nMeasuring {system.h_symb}")
 plt.tight_layout()
-plt.savefig(os.path.join(folder_path, "x.pdf"), format="pdf")
+plt.savefig(os.path.join(folder_path, "x.pdf"), format="pdf", bbox_inches='tight')
 
 # plot x big
 # fig, ax = plt.subplots(int((system.n+1)/2), 2, sharex=True, figsize=(8,4))
@@ -247,15 +253,15 @@ plt.savefig(os.path.join(folder_path, "x.pdf"), format="pdf")
 #     ax[idx].grid()
 #     ax[idx].scatter(0, x_solution[i, 0], color="tab:blue")
 #     ax[idx].scatter(0, x_hat[0, i], color="tab:orange")
-# ax[-1, 0].set_xlabel('Time (s)')
+# ax[-1, 0].set_xlabel('Zeit (s)')
 # if system.n %2 == 1:
 #     for i in range(system.n):
 #         ax[-1, 1].plot(t, np.abs(x_solution[i, :]-x_hat[:, i]), label=f"$\Delta x_{i+1}$", alpha=0.8)
-#         ax[-1, 1].set_ylabel(f'error')
+#         ax[-1, 1].set_ylabel(f'Fehler')
 #         ax[-1, 1].legend(loc="upper left")
 #         ax[-1, 1].set_yscale("log")
 #         ax[-1, 1].grid()
-# ax[-1, 1].set_xlabel('Time (s)')
+# ax[-1, 1].set_xlabel('Zeit (s)')
 # # ax[1,1].set_visible(False)
 # plt.tight_layout()
 # # fig.suptitle(f"observer in original coordinates\nMeasuring {system.h_symb}")
@@ -270,17 +276,17 @@ for i in range(sum(system.N)):
     ax[i, 0].set_ylim((min(z_nom[i, :])-1), max(z_nom[i, :])+1)
     ax[i, 0].legend()
     ax[i, 0].grid()
-ax[-1, 0].set_xlabel('Time (s)')
+ax[-1, 0].set_xlabel('Zeit (s)')
 for i in range(sum(system.N)):
-    ax[i, 1].plot(t, np.abs(z_nom[i, :]-z_hat_solution[i, :]), label="$z_{"+str(i+1)+"}$ error")
-    ax[i, 1].set_ylabel("$z_{"+str(i+1)+"}$ error")
+    ax[i, 1].plot(t, np.abs(z_nom[i, :]-z_hat_solution[i, :]), label="Fehler $z_{"+str(i+1)+"}$")
+    ax[i, 1].set_ylabel("Fehler $z_{"+str(i+1)+"}$")
     ax[i, 1].legend()
     ax[i, 1].set_yscale("log")
     ax[i, 1].grid()
-ax[-1, 1].set_xlabel('Time (s)')
+ax[-1, 1].set_xlabel('Zeit (s)')
 # fig.suptitle(f"embedded observer\nMeasuring {system.h_symb}")
 plt.tight_layout()
-plt.savefig(os.path.join(folder_path, "z.pdf"), format="pdf")
+plt.savefig(os.path.join(folder_path, "z.pdf"), format="pdf", bbox_inches='tight')
 
 # plot z double
 if system.N[0] == system.N[1]:#todo this is not sufficient
@@ -295,18 +301,18 @@ if system.N[0] == system.N[1]:#todo this is not sufficient
         ax[i, 0].set_ylim((np.min([z_nom[i, :], z_nom[i+N, :]])-1), np.max([z_nom[i, :], z_nom[i+N, :]])+1)
         ax[i, 0].legend()
         ax[i, 0].grid()
-    ax[-1, 0].set_xlabel('Time (s)')
+    ax[-1, 0].set_xlabel('Zeit (s)')
     for i in range(N):
-        ax[i, 1].plot(t, np.abs(z_nom[i, :]-z_hat_solution[i, :]), label="$z_{"+str(i+1)+"}$ error")
-        ax[i, 1].plot(t, np.abs(z_nom[i+N, :]-z_hat_solution[i+N, :]), label="$z_{"+str(i+N+1)+"}$ error")
-        ax[i, 1].set_ylabel("$z_{"+str(i+1)+"}$, $z_{"+str(i+N+1)+ "}$ error")
+        ax[i, 1].plot(t, np.abs(z_nom[i, :]-z_hat_solution[i, :]), label="Fehler $z_{"+str(i+1)+"}$")
+        ax[i, 1].plot(t, np.abs(z_nom[i+N, :]-z_hat_solution[i+N, :]), label="Fehler $z_{"+str(i+N+1)+"}$")
+        ax[i, 1].set_ylabel("Fehler $z_{"+str(i+1)+"}$, $z_{"+str(i+N+1)+ "}$")
         ax[i, 1].legend()
         ax[i, 1].set_yscale("log")
         ax[i, 1].grid()
-    ax[-1, 1].set_xlabel('Time (s)')
+    ax[-1, 1].set_xlabel('Zeit (s)')
     # fig.suptitle(f"embedded observer\nMeasuring {system.h_symb}")
     plt.tight_layout()
-    plt.savefig(os.path.join(folder_path, "z_double.pdf"), format="pdf")
+    plt.savefig(os.path.join(folder_path, "z_double.pdf"), format="pdf", bbox_inches='tight')
 
 # plot z bigger
 # fig, ax = plt.subplots(int((system.N+1)/2), 2, sharex=True, figsize=(8,4))
@@ -322,16 +328,16 @@ if system.N[0] == system.N[1]:#todo this is not sufficient
 #     ax[idx].grid()
 #     ax[idx].scatter(0, z_nom[i, 0], color="tab:blue")
 #     ax[idx].scatter(0, z_hat_solution[i, 0], color="tab:orange")
-# ax[-1, 0].set_xlabel('Time (s)')
+# ax[-1, 0].set_xlabel('Zeit (s)')
 # if system.N %2 == 1:
 #     for i in range(system.n):
 #         ax[-1, 1].plot(t, np.abs(z_nom[i, :]-z_hat_solution[i, :]), label=f"$\Delta z_{i+1}$", alpha=0.8)
-#         ax[-1, 1].set_ylabel(f'error')
+#         ax[-1, 1].set_ylabel(f'Fehler')
 #         ax[-1, 1].legend(loc="upper left")
 #         ax[-1, 1].set_yscale("log")
 #         ax[-1, 1].grid()
 #         ax[-1, 1]
-# ax[-1, 1].set_xlabel('Time (s)')
+# ax[-1, 1].set_xlabel('Zeit (s)')
 # plt.tight_layout()
 # # plt.show()
 # plt.savefig(os.path.join(folder_path, "z_big.pdf"), format="pdf")
@@ -339,8 +345,8 @@ if system.N[0] == system.N[1]:#todo this is not sufficient
 
 if system.n == 2:
     fig = plt.figure()
-    plt.plot(x_solution[0, :], x_solution[1, :], label="system", color="tab:blue")
-    plt.plot(x_hat[:, 0], x_hat[:, 1], label="observer", linestyle="dashed", color="tab:orange")
+    plt.plot(x_solution[0, :], x_solution[1, :], label="System", color="tab:blue")
+    plt.plot(x_hat[:, 0], x_hat[:, 1], label="Beobachter", linestyle="dashed", color="tab:orange")
     plt.scatter(x_solution[0, 0], x_solution[1, 0], color="tab:blue")
     plt.scatter(x_hat[0, 0], x_hat[0, 1], color="tab:orange")
     plt.xlim(min(x_solution[0, :])-0.5, max(x_solution[0, :]) +0.5)
@@ -352,8 +358,8 @@ if system.n == 2:
 elif system.n == 3:
     fig = plt.figure()
     ax = fig.add_subplot(projection="3d")
-    ax.plot(x_solution[0, :], x_solution[1, :], x_solution[2, :], label="system")
-    ax.plot(x_hat[:, 0], x_hat[:, 1], x_hat[:, 2], label="observer", linestyle="dashed")
+    ax.plot(x_solution[0, :], x_solution[1, :], x_solution[2, :], label="System")
+    ax.plot(x_hat[:, 0], x_hat[:, 1], x_hat[:, 2], label="Beobachter", linestyle="dashed")
     ax.scatter(x_solution[0, 0], x_solution[1, 0], x_solution[2, 0], color="tab:blue")
     ax.scatter(x_hat[0, 0], x_hat[0, 1], x_hat[0, 2], color="tab:orange")
     ax.set_xlim((min(x_solution[0, :])-1), max(x_solution[0, :])+1)
@@ -363,7 +369,7 @@ elif system.n == 3:
     ax.set_ylabel("$x_2$")
     ax.set_zlabel("$x_3$")
     plt.tight_layout()
-    plt.savefig(os.path.join(folder_path, "phase_big.pdf"), format="pdf")
+    plt.savefig(os.path.join(folder_path, "phase_big.pdf"), format="pdf", bbox_inches='tight')
     plt.title("Phase Diagramm")
 
 elif system.name == "DoublePendulum2":
@@ -371,10 +377,10 @@ elif system.name == "DoublePendulum2":
     # inner arm G1
     ax = fig.add_subplot(111)
     # system
-    ax.plot(x_solution[0]*2, x_solution[1]*2, color="tab:blue", label="system")
+    ax.plot(x_solution[0]*2, x_solution[1]*2, color="tab:blue", label="System")
     ax.scatter(x_solution[0,0]*2, x_solution[1,0]*2, color="tab:blue") # TODO *2 = *l/s1
     # observer
-    ax.plot(x_hat[:,0]*2, x_hat[:,1]*2, color="tab:orange", label="observer", alpha=0.5)
+    ax.plot(x_hat[:,0]*2, x_hat[:,1]*2, color="tab:orange", label="Beobachter", alpha=0.5)
     ax.scatter(x_hat[0,0]*2, x_hat[1,0]*2, color="tab:orange") # TODO *2 = *l/s1
 
     # outer arm G2
@@ -400,10 +406,10 @@ elif system.name == "MagneticPendulum":
     fig = plt.figure()
     ax = fig.add_subplot(111)
     # system
-    ax.plot(x_solution[0], x_solution[1], color="tab:blue", label="system")
+    ax.plot(x_solution[0], x_solution[1], color="tab:blue", label="System")
     ax.scatter(x_solution[0,0], x_solution[1,0], color="tab:blue")
     # observer
-    ax.plot(x_hat[:,0], x_hat[:,1], color="tab:orange", label="observer", alpha=0.5)
+    ax.plot(x_hat[:,0], x_hat[:,1], color="tab:orange", label="Beobachter", alpha=0.5)
     ax.scatter(x_hat[0,0], x_hat[0,1], color="tab:orange")
 
     # magnets
@@ -415,7 +421,7 @@ elif system.name == "MagneticPendulum":
     ax.set_ylabel("y")
 plt.legend()
 plt.tight_layout()
-plt.savefig(os.path.join(folder_path, "phase.pdf"), format="pdf")
+plt.savefig(os.path.join(folder_path, "phase.pdf"), format="pdf", bbox_inches='tight')
 plt.show()
 
 # animation
@@ -433,8 +439,8 @@ if confirm == "" or confirm == "y":
         y2 = []
         plt.xlim(-3,3)
         plt.ylim(-3,3)
-        line_sys, = ax.plot([], [], lw = 3, color="tab:blue", label="system")
-        line_obs, = ax.plot([], [], lw = 2, color="tab:orange", label="observer", alpha=0.5)
+        line_sys, = ax.plot([], [], lw = 3, color="tab:blue", label="System")
+        line_obs, = ax.plot([], [], lw = 2, color="tab:orange", label="Beobachter", alpha=0.5)
         plt.legend()
         def init(solutions):
             ax.scatter(solutions[0][0][0], solutions[0][1][0])
